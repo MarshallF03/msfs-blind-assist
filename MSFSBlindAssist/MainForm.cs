@@ -153,7 +153,8 @@ public partial class MainForm : Form
             "PMDG_777" => new PMDG777Definition(),
             "PMDG_737" => new PMDG737Definition(),
             "HS_787" => new HorizonSim787Definition(),
-            // Future aircraft will be added here
+            "C172_CLASSIC" => new CessnaC172ClassicDefinition(),
+            "C172_G1000" => new CessnaC172G1000Definition(),
             _ => new FlyByWireA320Definition() // Default to A320
         };
     }
@@ -3713,6 +3714,16 @@ public partial class MainForm : Form
         SwitchAircraft(new HorizonSim787Definition());
     }
 
+    private void CessnaC172ClassicMenuItem_Click(object? sender, EventArgs e)
+    {
+        SwitchAircraft(new CessnaC172ClassicDefinition());
+    }
+
+    private void CessnaC172G1000MenuItem_Click(object? sender, EventArgs e)
+    {
+        SwitchAircraft(new CessnaC172G1000Definition());
+    }
+
     private void SwitchAircraft(IAircraftDefinition newAircraft)
     {
         // Update the aircraft instance
@@ -3943,6 +3954,8 @@ public partial class MainForm : Form
         pmdg777MenuItem.Checked = false;
         pmdg737MenuItem.Checked = false;
         horizonSim787MenuItem.Checked = false;
+        cessnaC172ClassicMenuItem.Checked = false;
+        cessnaC172G1000MenuItem.Checked = false;
 
         // Set the check on the current aircraft's menu item
         if (currentAircraft is FlyByWireA320Definition)
@@ -3964,6 +3977,14 @@ public partial class MainForm : Form
         else if (currentAircraft is HorizonSim787Definition)
         {
             horizonSim787MenuItem.Checked = true;
+        }
+        else if (currentAircraft is CessnaC172ClassicDefinition)
+        {
+            cessnaC172ClassicMenuItem.Checked = true;
+        }
+        else if (currentAircraft is CessnaC172G1000Definition)
+        {
+            cessnaC172G1000MenuItem.Checked = true;
         }
     }
 

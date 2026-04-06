@@ -23,6 +23,8 @@ namespace MSFSBlindAssist
         private System.Windows.Forms.ToolStripMenuItem pmdg777MenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem pmdg737MenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem horizonSim787MenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem cessnaC172ClassicMenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem cessnaC172G1000MenuItem = null!;
         private System.Windows.Forms.ListBox sectionsListBox = null!;
         private System.Windows.Forms.ListBox panelsListBox = null!;
         private System.Windows.Forms.Panel controlsContainer = null!;
@@ -59,6 +61,8 @@ namespace MSFSBlindAssist
             this.pmdg777MenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.pmdg737MenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.horizonSim787MenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.cessnaC172ClassicMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.cessnaC172G1000MenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.sectionsListBox = new System.Windows.Forms.ListBox();
             this.panelsListBox = new System.Windows.Forms.ListBox();
             this.controlsContainer = new System.Windows.Forms.Panel();
@@ -222,7 +226,9 @@ namespace MSFSBlindAssist
             this.fenixA320MenuItem,
             this.pmdg777MenuItem,
             this.pmdg737MenuItem,
-            this.horizonSim787MenuItem});
+            this.horizonSim787MenuItem,
+            this.cessnaC172ClassicMenuItem,
+            this.cessnaC172G1000MenuItem});
             this.aircraftMenuItem.Name = "aircraftMenuItem";
             this.aircraftMenuItem.Size = new System.Drawing.Size(75, 24);
             this.aircraftMenuItem.Text = "&Aircraft";
@@ -276,6 +282,26 @@ namespace MSFSBlindAssist
             this.horizonSim787MenuItem.Text = "HorizonSim Boeing &787-9";
             this.horizonSim787MenuItem.Checked = false;
             this.horizonSim787MenuItem.Click += new System.EventHandler(this.HorizonSim787MenuItem_Click);
+            //
+            // cessnaC172ClassicMenuItem
+            //
+            this.cessnaC172ClassicMenuItem.AccessibleName = "Cessna 172 Skyhawk Classic";
+            this.cessnaC172ClassicMenuItem.AccessibleDescription = "Switch to Cessna 172 Skyhawk with steam gauges";
+            this.cessnaC172ClassicMenuItem.Name = "cessnaC172ClassicMenuItem";
+            this.cessnaC172ClassicMenuItem.Size = new System.Drawing.Size(240, 26);
+            this.cessnaC172ClassicMenuItem.Text = "Cessna 172 &Classic";
+            this.cessnaC172ClassicMenuItem.Checked = false;
+            this.cessnaC172ClassicMenuItem.Click += new System.EventHandler(this.CessnaC172ClassicMenuItem_Click);
+            //
+            // cessnaC172G1000MenuItem
+            //
+            this.cessnaC172G1000MenuItem.AccessibleName = "Cessna 172 Skyhawk G1000";
+            this.cessnaC172G1000MenuItem.AccessibleDescription = "Switch to Cessna 172 Skyhawk with G1000 glass cockpit";
+            this.cessnaC172G1000MenuItem.Name = "cessnaC172G1000MenuItem";
+            this.cessnaC172G1000MenuItem.Size = new System.Drawing.Size(240, 26);
+            this.cessnaC172G1000MenuItem.Text = "Cessna 172 &G1000";
+            this.cessnaC172G1000MenuItem.Checked = false;
+            this.cessnaC172G1000MenuItem.Click += new System.EventHandler(this.CessnaC172G1000MenuItem_Click);
             //
             // sectionsListBox
             // 
