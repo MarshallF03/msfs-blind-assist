@@ -38,6 +38,7 @@ public partial class MainForm : Form
     private FenixMCDUService? fenixMCDUService;
     private System.Windows.Forms.Form? pmdgCDUForm;
     private System.Windows.Forms.Form? pmdgEFBForm;
+    private Forms.A2AComanche.A2AComancheHangarForm? comancheHangarForm;
     private EFBBridgeServer? efbBridgeServer;
     private EFBBridgeServer? hs787BridgeServer;
     private HS787FMCForm? hs787FMCForm;
@@ -155,6 +156,7 @@ public partial class MainForm : Form
             "HS_787" => new HorizonSim787Definition(),
             "C172_CLASSIC" => new CessnaC172ClassicDefinition(),
             "C172_G1000" => new CessnaC172G1000Definition(),
+            "A2A_COMANCHE" => new A2AComancheDefinition(),
             _ => new FlyByWireA320Definition() // Default to A320
         };
     }
@@ -1593,7 +1595,14 @@ public partial class MainForm : Form
                 ShowChecklistDialog();
                 break;
             case HotkeyAction.ShowElectronicFlightBag:
-                ShowElectronicFlightBagDialog();
+                if (currentAircraft is A2AComancheDefinition)
+                {
+                    ShowComancheHangarDialog();
+                }
+                else
+                {
+                    ShowElectronicFlightBagDialog();
+                }
                 break;
             case HotkeyAction.ShowFenixMCDU:
                 if (currentAircraft is IPMDGAircraft && simConnectManager.PMDGDataManager != null)
@@ -2399,6 +2408,16 @@ public partial class MainForm : Form
         }
 
         hs787SimBriefForm.ShowForm();
+    }
+
+    private void ShowComancheHangarDialog()
+    {
+        if (comancheHangarForm == null || comancheHangarForm.IsDisposed)
+        {
+            comancheHangarForm = new Forms.A2AComanche.A2AComancheHangarForm(simConnectManager, announcer);
+        }
+        comancheHangarForm.ShowForm();
+        comancheHangarForm.RefreshData();
     }
 
     private void CheckAndOfferEFBModPackage()
@@ -3724,6 +3743,11 @@ public partial class MainForm : Form
         SwitchAircraft(new CessnaC172G1000Definition());
     }
 
+    private void A2AComancheMenuItem_Click(object? sender, EventArgs e)
+    {
+        SwitchAircraft(new A2AComancheDefinition());
+    }
+
     private void SwitchAircraft(IAircraftDefinition newAircraft)
     {
         // Update the aircraft instance
@@ -3841,6 +3865,13 @@ public partial class MainForm : Form
             hs787FMCForm = null;
         }
 
+        // Dispose Comanche hangar form when switching aircraft
+        if (comancheHangarForm != null && !comancheHangarForm.IsDisposed)
+        {
+            comancheHangarForm.Dispose();
+            comancheHangarForm = null;
+        }
+
         if (hs787SimBriefForm != null && !hs787SimBriefForm.IsDisposed)
         {
             hs787SimBriefForm.Dispose();
@@ -3956,6 +3987,7 @@ public partial class MainForm : Form
         horizonSim787MenuItem.Checked = false;
         cessnaC172ClassicMenuItem.Checked = false;
         cessnaC172G1000MenuItem.Checked = false;
+        a2aComancheMenuItem.Checked = false;
 
         // Set the check on the current aircraft's menu item
         if (currentAircraft is FlyByWireA320Definition)
@@ -3985,6 +4017,10 @@ public partial class MainForm : Form
         else if (currentAircraft is CessnaC172G1000Definition)
         {
             cessnaC172G1000MenuItem.Checked = true;
+        }
+        else if (currentAircraft is A2AComancheDefinition)
+        {
+            a2aComancheMenuItem.Checked = true;
         }
     }
 
