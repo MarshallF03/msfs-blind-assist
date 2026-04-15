@@ -40,15 +40,20 @@ namespace MSFSBlindAssist.SimConnect
         // Latest state from the bridge
         private JsonElement _lastFlightPlan;
         private JsonElement _lastNavState;
+        private JsonElement _lastPageState;
         private bool _hasFms = false;
+        private int _instrumentType = 0; // 1=GNS530, 2=GNS430, 3=G1000MFD
 
         public event EventHandler<GNSStateUpdateEventArgs>? StateUpdated;
 
         public bool IsRunning => _listener?.IsListening == true;
         public bool IsBridgeConnected => (DateTime.UtcNow - _lastHeartbeat).TotalSeconds < HeartbeatTimeoutSeconds;
         public bool HasFms => _hasFms;
+        public int InstrumentType => _instrumentType;
         public JsonElement LastFlightPlan => _lastFlightPlan;
         public JsonElement LastNavState => _lastNavState;
+        public JsonElement LastPageState => _lastPageState;
+        public DateTime LastHeartbeat => _lastHeartbeat;
 
         public GNSBridgeServer()
         {
@@ -190,6 +195,13 @@ namespace MSFSBlindAssist.SimConnect
                     case "connected":
                         System.Diagnostics.Debug.WriteLine("[GNS Bridge Server] Bridge connected");
                         _hasFms = false;
+                        if (data.ValueKind == JsonValueKind.Object &&
+                            data.TryGetProperty("instrumentType", out var typeProp) &&
+                            typeProp.ValueKind == JsonValueKind.Number)
+                        {
+                            _instrumentType = typeProp.GetInt32();
+                        }
+                        RaiseStateUpdated(type, data.ValueKind != JsonValueKind.Undefined ? data.Clone() : default);
                         break;
 
                     case "heartbeat":
@@ -197,6 +209,12 @@ namespace MSFSBlindAssist.SimConnect
 
                     case "flight_plan":
                         _lastFlightPlan = data.Clone();
+                        _hasFms = true;
+                        RaiseStateUpdated(type, data.Clone());
+                        break;
+
+                    case "page_state":
+                        _lastPageState = data.Clone();
                         _hasFms = true;
                         RaiseStateUpdated(type, data.Clone());
                         break;

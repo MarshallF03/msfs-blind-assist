@@ -161,6 +161,44 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
                 UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
             },
 
+            // ===== GPS BRIDGE DIAGNOSTIC L-VARS =====
+            // Set by the injected GPS bridge JS so we can detect its state even when HTTP fails.
+            ["MSFSBA_GPSBridge_Loaded"] = new SimConnect.SimVarDefinition
+            {
+                Name = "MSFSBA_GPSBridge_Loaded",
+                DisplayName = "GPS Bridge Loaded",
+                Type = SimConnect.SimVarType.LVar,
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["MSFSBA_GPSBridge_FmsFound"] = new SimConnect.SimVarDefinition
+            {
+                Name = "MSFSBA_GPSBridge_FmsFound",
+                DisplayName = "GPS Bridge FMS Found",
+                Type = SimConnect.SimVarType.LVar,
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["MSFSBA_GPSBridge_ServerConnected"] = new SimConnect.SimVarDefinition
+            {
+                Name = "MSFSBA_GPSBridge_ServerConnected",
+                DisplayName = "GPS Bridge Server Connected",
+                Type = SimConnect.SimVarType.LVar,
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["MSFSBA_GPSBridge_ErrorCode"] = new SimConnect.SimVarDefinition
+            {
+                Name = "MSFSBA_GPSBridge_ErrorCode",
+                DisplayName = "GPS Bridge Error Code",
+                Type = SimConnect.SimVarType.LVar,
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["MSFSBA_GPSBridge_InstrumentType"] = new SimConnect.SimVarDefinition
+            {
+                Name = "MSFSBA_GPSBridge_InstrumentType",
+                DisplayName = "GPS Bridge Instrument Type",
+                Type = SimConnect.SimVarType.LVar,
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+
             // Ground state - universal SimConnect variable that works with all aircraft
             ["SIM_ON_GROUND"] = new SimConnect.SimVarDefinition
             {
