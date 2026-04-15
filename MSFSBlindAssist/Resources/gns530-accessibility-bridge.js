@@ -7,6 +7,10 @@
 // Top-level try-catch ensures errors here never break the GPS instrument.
 try {
 
+// IMMEDIATE: Write loaded L-var before anything else so we can confirm script executed
+try { SimVar.SetSimVarValue('L:MSFSBA_GPSBridge_Loaded', 'number', 1); } catch (e0) {}
+try { SimVar.SetSimVarValue('L:MSFSBA_GPSBridge_InstrumentType', 'number', 1); } catch (e0) {}
+
 var _gps = {
     VERSION: '2.0.0',
     SERVER_URL: 'http://localhost:19778',

@@ -2,11 +2,12 @@ namespace MSFSBlindAssist.Forms.GPS;
 
 partial class GPSNavigatorForm
 {
-    private Label pageGroupLabel = null!;
-    private Label navInfoLabel = null!;
-    private Label navDetailLabel = null!;
-    private Label statusLabel = null!;
-    private Label diagLabel = null!;
+    private TextBox pageGroupLabel = null!;
+    private TextBox navInfoLabel = null!;
+    private TextBox navDetailLabel = null!;
+    private TextBox statusLabel = null!;
+    private TextBox diagLabel = null!;
+    private TextBox probeOutputBox = null!;
     private ListBox pageContentList = null!;
 
     private void InitializeComponent()
@@ -26,56 +27,96 @@ partial class GPSNavigatorForm
         int rightX = 520;
         int rightWidth = 280;
 
-        // Status bar (top)
-        statusLabel = new Label
+        // Diagnostics at the TOP so it's the first thing on tab order
+        diagLabel = new TextBox
+        {
+            Text = "Bridge status: checking...",
+            AccessibleName = "GPS bridge diagnostics",
+            AccessibleDescription = "Shows whether the GPS bridge is loaded, FMS found, and HTTP connected",
+            Location = new System.Drawing.Point(10, y),
+            Size = new System.Drawing.Size(800, 24),
+            ReadOnly = true,
+            BackColor = System.Drawing.Color.LightYellow,
+            Font = new System.Drawing.Font(System.Drawing.SystemFonts.DefaultFont, System.Drawing.FontStyle.Bold),
+            TabIndex = 0
+        };
+        y += 30;
+
+        // Status bar
+        statusLabel = new TextBox
         {
             Text = "GPS Navigator ready",
             AccessibleName = "Status",
             Location = new System.Drawing.Point(10, y),
-            Size = new System.Drawing.Size(800, 20),
-            Font = new System.Drawing.Font(System.Drawing.SystemFonts.DefaultFont, System.Drawing.FontStyle.Bold)
+            Size = new System.Drawing.Size(800, 22),
+            ReadOnly = true,
+            TabIndex = 1
         };
         y += 25;
 
         // Nav info line
-        navInfoLabel = new Label
+        navInfoLabel = new TextBox
         {
             Text = "Next: ---  |  --- NM  |  ---°  |  ETE ---",
-            AccessibleName = "Current navigation: no data",
+            AccessibleName = "Current navigation status",
             Location = new System.Drawing.Point(10, y),
-            Size = new System.Drawing.Size(800, 20)
+            Size = new System.Drawing.Size(800, 22),
+            ReadOnly = true,
+            TabIndex = 2
         };
-        y += 22;
+        y += 25;
 
-        navDetailLabel = new Label
+        navDetailLabel = new TextBox
         {
             Text = "DTK: ---  |  XTK: ---  |  GS: ---  |  GPS→NAV: ---",
-            AccessibleName = "Navigation details: no data",
+            AccessibleName = "Navigation details",
             Location = new System.Drawing.Point(10, y),
-            Size = new System.Drawing.Size(800, 20)
+            Size = new System.Drawing.Size(800, 22),
+            ReadOnly = true,
+            TabIndex = 3
         };
         y += 30;
 
         // === LEFT SIDE: Current page mirror ===
-        pageGroupLabel = new Label
+        pageGroupLabel = new TextBox
         {
             Text = "No page data",
             AccessibleName = "Current GPS page",
             Location = new System.Drawing.Point(10, y),
             Size = new System.Drawing.Size(leftWidth, 22),
-            Font = new System.Drawing.Font(System.Drawing.SystemFonts.DefaultFont, System.Drawing.FontStyle.Bold)
+            ReadOnly = true,
+            Font = new System.Drawing.Font(System.Drawing.SystemFonts.DefaultFont, System.Drawing.FontStyle.Bold),
+            TabIndex = 4
         };
 
         int listY = y + 25;
         pageContentList = new ListBox
         {
             Location = new System.Drawing.Point(10, listY),
-            Size = new System.Drawing.Size(leftWidth, 450),
+            Size = new System.Drawing.Size(leftWidth, 220),
             AccessibleName = "GPS page content",
             AccessibleDescription = "The current contents of the GPS screen. Arrow keys rotate the GPS knob; Enter is the ENT key.",
-            Font = new System.Drawing.Font("Consolas", 10)
+            Font = new System.Drawing.Font("Consolas", 10),
+            TabIndex = 5
         };
         pageContentList.KeyDown += PageContentList_KeyDown;
+
+        // Probe output textbox — below the page content list, in tab order,
+        // so blind users can Tab to it and read the full diagnostic dump at once.
+        probeOutputBox = new TextBox
+        {
+            Location = new System.Drawing.Point(10, listY + 230),
+            Size = new System.Drawing.Size(leftWidth, 220),
+            AccessibleName = "Probe output",
+            AccessibleDescription = "Text dump of GPS MFD internal structure from the last Probe MFD press. Use arrow keys to read line by line.",
+            Multiline = true,
+            ReadOnly = true,
+            ScrollBars = ScrollBars.Vertical,
+            WordWrap = false,
+            Font = new System.Drawing.Font("Consolas", 10),
+            Text = "(press Probe MFD or Ctrl+P to fill this box with the G1000 MFD structure)",
+            TabIndex = 6
+        };
 
         // === RIGHT SIDE: Button panel ===
         int btnWidth = 130;
@@ -197,28 +238,34 @@ partial class GPSNavigatorForm
         installBtn.Click += InstallBridgeButton_Click;
         btnY += btnHeight + btnSpacing;
 
-        // Diagnostics at the bottom (full width)
-        diagLabel = new Label
-        {
-            Text = "Bridge status: checking...",
-            AccessibleName = "Bridge diagnostics",
-            Location = new System.Drawing.Point(10, 630),
-            Size = new System.Drawing.Size(800, 22),
-            BorderStyle = BorderStyle.FixedSingle,
-            TextAlign = System.Drawing.ContentAlignment.MiddleLeft
-        };
+        var probeBtn = CreateGpsButton("Probe MFD (Ctrl+P)", "Ask the bridge to report what GPS structure it can see (diagnostic). Shortcut: Ctrl+P.", rightX, btnY, rightWidth - 10, btnHeight);
+        probeBtn.Click += ProbeButton_Click;
+        probeBtn.Name = "probeBtn";
+        btnY += btnHeight + btnSpacing;
 
         // Add everything
         this.Controls.AddRange(new Control[] {
             statusLabel, navInfoLabel, navDetailLabel,
-            pageGroupLabel, pageContentList,
+            pageGroupLabel, pageContentList, probeOutputBox,
             grpLabel, fplBtn, procBtn, vnavBtn, menuBtn, msgBtn, obsBtn,
             inputLabel, dtoBtn, entBtn, clrBtn, cursorBtn,
             knobLabel, liInc, liDec, loInc, loDec, riInc, riDec, roInc, roDec,
             rangeInBtn, rangeOutBtn,
-            actionLabel, readBtn, drivesBtn, actLegBtn, installBtn,
+            actionLabel, readBtn, drivesBtn, actLegBtn, installBtn, probeBtn,
             diagLabel
         });
+
+        // Form-level hotkey for probe (Ctrl+P) — works even when focus is inside the listbox
+        this.KeyPreview = true;
+        this.KeyDown += (s, e) =>
+        {
+            if (e.Control && e.KeyCode == Keys.P)
+            {
+                ProbeButton_Click(s, EventArgs.Empty);
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+            }
+        };
     }
 
     private Button CreateGpsButton(string text, string description, int x, int y, int w, int h)

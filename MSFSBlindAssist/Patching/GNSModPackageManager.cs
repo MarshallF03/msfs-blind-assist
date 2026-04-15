@@ -91,8 +91,16 @@ public static class GNSModPackageManager
                 return (false, false, "Could not find MSFS Community folder");
 
             string packagePath = Path.Combine(communityPath, PackageName);
-            bool packageExists = Directory.Exists(packagePath);
-            bool anyUpdated = false;
+            bool packageExisted = Directory.Exists(packagePath);
+
+            // Always wipe and reinstall so the HTML overrides + manifest are fresh
+            // (previous versions had a UTF-8 BOM and wrong content_type that prevented loading)
+            if (packageExisted)
+            {
+                try { Directory.Delete(packagePath, recursive: true); } catch { }
+            }
+            bool packageExists = false;
+            bool anyUpdated = true;
             var messages = new List<string>();
 
             // --- GNS 530 Bridge ---
@@ -106,7 +114,7 @@ public static class GNSModPackageManager
 
                 if (!File.Exists(gns530JsDest) || File.ReadAllText(gns530JsDest) != gns530BridgeJs)
                 {
-                    File.WriteAllText(gns530JsDest, gns530BridgeJs, Encoding.UTF8);
+                    File.WriteAllText(gns530JsDest, gns530BridgeJs, new UTF8Encoding(false));
                     anyUpdated = true;
                 }
 
@@ -124,7 +132,7 @@ public static class GNSModPackageManager
                                 "import-script=\"/Pages/VCockpit/Instruments/NavSystems/GPS/WT530/WT530B.js\"></script>" + scriptTag);
                         else
                             htmlContent += scriptTag;
-                        File.WriteAllText(gns530Html, htmlContent, Encoding.UTF8);
+                        File.WriteAllText(gns530Html, htmlContent, new UTF8Encoding(false));
                         anyUpdated = true;
                         messages.Add("GNS 530 bridge installed");
                     }
@@ -146,7 +154,7 @@ public static class GNSModPackageManager
 
                 if (!File.Exists(g1000JsDest) || File.ReadAllText(g1000JsDest) != g1000BridgeJs)
                 {
-                    File.WriteAllText(g1000JsDest, g1000BridgeJs, Encoding.UTF8);
+                    File.WriteAllText(g1000JsDest, g1000BridgeJs, new UTF8Encoding(false));
                     anyUpdated = true;
                 }
 
@@ -164,7 +172,7 @@ public static class GNSModPackageManager
                                 "import-script=\"/Pages/VCockpit/Instruments/NavSystems/WTG1000/MFD/MFD.js\"></script>" + scriptTag);
                         else
                             htmlContent += scriptTag;
-                        File.WriteAllText(g1000Html, htmlContent, Encoding.UTF8);
+                        File.WriteAllText(g1000Html, htmlContent, new UTF8Encoding(false));
                         anyUpdated = true;
                         messages.Add("G1000 NXi bridge installed");
                     }
@@ -178,25 +186,29 @@ public static class GNSModPackageManager
             if (!anyUpdated && packageExists)
                 return (true, false, "GPS bridge package is up to date");
 
-            // Create manifest.json
-            string manifest = @"{
-    ""dependencies"": [],
-    ""content_type"": ""SCENERY"",
-    ""title"": ""GPS Accessibility Bridge (GNS 530 + G1000)"",
-    ""manufacturer"": """",
-    ""creator"": ""MSFS Blind Assist"",
-    ""package_version"": ""1.0.0"",
-    ""minimum_game_version"": ""1.0.0"",
-    ""release_notes"": {
-        ""neutral"": {
-            ""LastUpdate"": """",
-            ""OlderHistory"": """"
-        }
-    }
-}";
-            File.WriteAllText(Path.Combine(packagePath, "manifest.json"), manifest, Encoding.UTF8);
+            // Create manifest.json — use same format as PMDG EFB bridge that works
+            // content_type MISC for instrument overrides, no UTF-8 BOM
+            string manifest = "{\n" +
+                "  \"dependencies\": [],\n" +
+                "  \"content_type\": \"MISC\",\n" +
+                "  \"title\": \"MSFS Blind Assist - GPS Accessibility Bridge\",\n" +
+                "  \"manufacturer\": \"\",\n" +
+                "  \"creator\": \"MSFS Blind Assist\",\n" +
+                "  \"package_version\": \"1.0.0\",\n" +
+                "  \"minimum_game_version\": \"1.39.9\",\n" +
+                "  \"release_notes\": {\n" +
+                "    \"neutral\": {\n" +
+                "      \"LastUpdate\": \"\",\n" +
+                "      \"OlderHistory\": \"\"\n" +
+                "    }\n" +
+                "  },\n" +
+                "  \"total_package_size\": \"0000000000000001000\"\n" +
+                "}";
+            // Write WITHOUT UTF-8 BOM (use UTF8 encoding without BOM)
+            var utf8NoBom = new UTF8Encoding(false);
+            File.WriteAllText(Path.Combine(packagePath, "manifest.json"), manifest, utf8NoBom);
 
-            // Create layout.json with file sizes
+            // Create layout.json with file sizes — also without BOM
             var layoutEntries = new List<string>();
             foreach (var file in Directory.GetFiles(packagePath, "*", SearchOption.AllDirectories))
             {
@@ -207,7 +219,7 @@ public static class GNSModPackageManager
                 layoutEntries.Add($"    {{ \"path\": \"{relativePath}\", \"size\": {size}, \"date\": 0 }}");
             }
             string layout = "{\n  \"content\": [\n" + string.Join(",\n", layoutEntries) + "\n  ]\n}";
-            File.WriteAllText(Path.Combine(packagePath, "layout.json"), layout, Encoding.UTF8);
+            File.WriteAllText(Path.Combine(packagePath, "layout.json"), layout, utf8NoBom);
 
             bool needsRestart = !packageExists;
             string detail = messages.Count > 0 ? string.Join(". ", messages) : "Scripts updated";

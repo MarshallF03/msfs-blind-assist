@@ -1511,7 +1511,7 @@ public class SimConnectManager
                 });
                 break;
 
-            case (DATA_REQUESTS)370: // Waypoint Info (new ID to avoid collision with fuel/payload range)
+            case (DATA_REQUESTS)370: // Waypoint Info (silent variant for GPS Navigator — does NOT announce)
                 WaypointInfo waypointData370 = (WaypointInfo)data.dwData[0];
 
                 // Unpack waypoint name from encoded doubles
@@ -1520,7 +1520,7 @@ public class SimConnectManager
                 string description370;
                 if (string.IsNullOrWhiteSpace(waypointName370))
                 {
-                    description370 = "No active waypoint";
+                    description370 = "";
                 }
                 else
                 {
@@ -1532,9 +1532,10 @@ public class SimConnectManager
                     description370 = $"{waypointName370}, {waypointData370.distance:0.0} NM, {bearingDegrees370:0} degrees";
                 }
 
+                // Use a different VarName so MainForm doesn't announce it
                 SimVarUpdated?.Invoke(this, new SimVarUpdateEventArgs
                 {
-                    VarName = "WAYPOINT_INFO",
+                    VarName = "WAYPOINT_INFO_SILENT",
                     Value = waypointData370.distance,
                     Description = description370
                 });

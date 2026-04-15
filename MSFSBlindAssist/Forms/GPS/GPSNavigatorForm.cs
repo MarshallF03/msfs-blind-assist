@@ -22,6 +22,13 @@ public partial class GPSNavigatorForm : Form
     private JsonElement _currentPageState;
     private JsonElement _currentNavState;
     private string _currentWpName = "---";
+    private int _pageStateEventCount = 0;
+    private int _navStateEventCount = 0;
+    private string _lastEventType = "none";
+    private string _lastCommandInfo = "";
+    private bool _inProbeMode = false;
+    private string _lastPageKey = "";
+    private int _lastSelectedIndex = -1;
 
     // Pending variable updates (for waypoint name read)
     private readonly Dictionary<string, Action<double>> _pendingUpdates = new();
@@ -36,13 +43,13 @@ public partial class GPSNavigatorForm : Form
         _bridge.StateUpdated += OnBridgeStateUpdated;
         _simConnect.SimVarUpdated += OnSimVarUpdated;
 
-        // Page state refresh from bridge (fast)
-        _refreshTimer = new System.Windows.Forms.Timer { Interval = 1500 };
-        _refreshTimer.Tick += (s, e) => RefreshFromSimVars();
+        // SimVar fallback refresh — every 5 seconds, only when bridge is not connected
+        _refreshTimer = new System.Windows.Forms.Timer { Interval = 5000 };
+        _refreshTimer.Tick += (s, e) => { if (!_bridge.IsBridgeConnected) RefreshFromSimVars(); };
         _refreshTimer.Start();
 
-        // Diagnostic L-var polling (slower)
-        _diagnosticTimer = new System.Windows.Forms.Timer { Interval = 2000 };
+        // Diagnostic L-var polling — every 3 seconds
+        _diagnosticTimer = new System.Windows.Forms.Timer { Interval = 3000 };
         _diagnosticTimer.Tick += (s, e) => UpdateDiagnostics();
         _diagnosticTimer.Start();
     }
@@ -79,32 +86,67 @@ public partial class GPSNavigatorForm : Form
     private void OnBridgeStateUpdated(object? sender, GNSStateUpdateEventArgs e)
     {
         if (InvokeRequired) { Invoke(() => OnBridgeStateUpdated(sender, e)); return; }
+        _lastEventType = e.Type;
         switch (e.Type)
         {
             case "page_state":
+                _pageStateEventCount++;
                 _currentPageState = e.Data;
+                _inProbeMode = false;
                 UpdatePageDisplay();
+                UpdateStatusLabel();
                 break;
             case "nav_state":
+                _navStateEventCount++;
                 _currentNavState = e.Data;
                 UpdateNavDisplay();
+                UpdateStatusLabel();
                 break;
             case "connected":
-                statusLabel.Text = "Bridge connected";
+                _lastCommandInfo = "Bridge connected";
+                UpdateStatusLabel();
                 break;
             case "command_ack":
+            {
+                string ev = TryGetString(e.Data, "event") ?? TryGetString(e.Data, "command") ?? "?";
+                string he = TryGetString(e.Data, "hEvent") ?? "";
+                _lastCommandInfo = $"ACK: {ev}" + (he.Length > 0 ? $" → H:{he}" : "");
+                UpdateStatusLabel();
                 // Force a refresh after a command is acknowledged
                 _bridge.SendCommand("request_state");
                 break;
+            }
             case "command_error":
-                _announcer.AnnounceImmediate("GPS command failed");
+            {
+                string ev = TryGetString(e.Data, "event") ?? TryGetString(e.Data, "command") ?? "?";
+                string err = TryGetString(e.Data, "error") ?? "unknown";
+                _lastCommandInfo = $"ERR: {ev} — {err}";
+                UpdateStatusLabel();
+                _announcer.AnnounceImmediate($"GPS command failed: {err}");
                 break;
+            }
+            case "debug_probe":
+            {
+                _inProbeMode = true;
+                pageGroupLabel.Text = "PROBE — MFD structure received (Tab to Probe output box to read)";
+                string text = TryGetString(e.Data, "text") ?? e.Data.ToString();
+                // Convert bare \n to CRLF so the multiline TextBox renders line breaks correctly
+                text = text.Replace("\r\n", "\n").Replace("\n", "\r\n");
+                probeOutputBox.Text = text;
+                probeOutputBox.SelectionStart = 0;
+                probeOutputBox.SelectionLength = 0;
+                try { probeOutputBox.Focus(); } catch { }
+                _lastCommandInfo = "Probe received — Tab to Probe output box";
+                UpdateStatusLabel();
+                _announcer.AnnounceImmediate("Probe output ready in probe output box");
+                break;
+            }
         }
     }
 
     private void OnSimVarUpdated(object? sender, SimVarUpdateEventArgs e)
     {
-        if (e.VarName == "WAYPOINT_INFO" && !string.IsNullOrEmpty(e.Description))
+        if (e.VarName == "WAYPOINT_INFO_SILENT" && !string.IsNullOrEmpty(e.Description))
         {
             if (InvokeRequired) Invoke(() => HandleWaypointInfo(e.Description));
             else HandleWaypointInfo(e.Description);
@@ -169,6 +211,37 @@ public partial class GPSNavigatorForm : Form
             if (pageContentList.Items.Count == 0)
             {
                 pageContentList.Items.Add($"[No list items for this page type: {pageType}]");
+            }
+
+            // Announce page/selection changes for screen reader workflow.
+            // Page changed → announce the new page + selected item so user knows where they are.
+            // Selection changed on same page → announce just the new item (screen reader may
+            // already do this via listbox focus, but we speak it too for reliability when
+            // focus isn't in the list).
+            string pageKey = GetString(_currentPageState, "pageKey", groupLabel);
+            string selectedText = (selected >= 0 && selected < pageContentList.Items.Count)
+                ? (pageContentList.Items[selected]?.ToString() ?? "")
+                : "";
+            if (pageKey != _lastPageKey)
+            {
+                if (!string.IsNullOrEmpty(pageKey))
+                {
+                    string announceLine = string.IsNullOrEmpty(selectedText)
+                        ? $"{pageTitle}"
+                        : $"{pageTitle}. Selected: {selectedText.Trim()}";
+                    _announcer.AnnounceImmediate(announceLine);
+                }
+                _lastPageKey = pageKey;
+                _lastSelectedIndex = selected;
+            }
+            else if (selected != _lastSelectedIndex && selected >= 0 && !string.IsNullOrEmpty(selectedText))
+            {
+                // Only announce if focus is NOT in the list (list focus already triggers SR announce)
+                if (!pageContentList.Focused)
+                {
+                    _announcer.AnnounceImmediate(selectedText.Trim());
+                }
+                _lastSelectedIndex = selected;
             }
         }
         catch (Exception ex)
@@ -348,16 +421,41 @@ public partial class GPSNavigatorForm : Form
         diagLabel.AccessibleName = diagLabel.Text;
     }
 
-    private static string ErrorCodeToText(int code) => code switch
+    private static string ErrorCodeToText(int code)
     {
-        0 => "None",
-        1 => "Instrument not found",
-        2 => "FMS not ready",
-        3 => "Page container not ready",
-        4 => "HTTP server unreachable",
-        99 => "Fatal script error",
-        _ => code.ToString()
-    };
+        // 100-199: diagnostic path taken during flight plan extraction
+        if (code >= 100 && code < 200)
+        {
+            int path = code - 100;
+            return path switch
+            {
+                0 => "FPL extract: no path tried",
+                1 => "FPL extract: got plan via getPrimaryFlightPlan",
+                2 => "FPL extract: got plan via flightPlanner.getActiveFlightPlan",
+                -1 => "FPL extract: getPrimaryFlightPlan threw exception",
+                -2 => "FPL extract: getActiveFlightPlan threw exception",
+                _ => $"FPL extract path {path}"
+            };
+        }
+        // 200+: flight plan length (plan found, code-200 = number of legs)
+        if (code >= 200 && code < 300)
+        {
+            return $"Flight plan has {code - 200} legs";
+        }
+        return code switch
+        {
+            0 => "None",
+            1 => "Instrument not found (lookup failed)",
+            2 => "FMS not ready",
+            3 => "Page container not ready",
+            4 => "HTTP server unreachable",
+            10 => "BaseInstrument undefined",
+            11 => "BaseInstrument.allInstruments is empty",
+            12 => "Exception during readiness check",
+            99 => "Fatal script error",
+            _ => code.ToString()
+        };
+    }
 
     private static string InstrumentTypeToText(int code) => code switch
     {
@@ -399,6 +497,12 @@ public partial class GPSNavigatorForm : Form
     private void RangeInButton_Click(object? sender, EventArgs e) => SendInteractionEvent("RangeIncrease");
     private void RangeOutButton_Click(object? sender, EventArgs e) => SendInteractionEvent("RangeDecrease");
 
+    private void ProbeButton_Click(object? sender, EventArgs e)
+    {
+        _bridge.SendCommand("probe");
+        _announcer.AnnounceImmediate("Probing MFD structure");
+    }
+
     private void GpsDrivesNavButton_Click(object? sender, EventArgs e)
     {
         _bridge.SendCommand("gps_drives_nav");
@@ -438,10 +542,12 @@ public partial class GPSNavigatorForm : Form
         statusLabel.Text = message;
     }
 
-    // List box keyboard navigation — arrow keys rotate the right inner knob
+    // List box keyboard navigation — arrow keys rotate the right inner knob,
+    // EXCEPT in probe mode where we want native listbox navigation so the
+    // user can read the diagnostic output.
     private void PageContentList_KeyDown(object? sender, KeyEventArgs e)
     {
-        // Only send knob rotations if bridge is connected — otherwise let native navigation work
+        if (_inProbeMode) return; // native list nav for reading probe output
         if (!_bridge.IsBridgeConnected) return;
 
         switch (e.KeyCode)
@@ -462,6 +568,22 @@ public partial class GPSNavigatorForm : Form
     }
 
     // --- Helpers ---
+
+    private void UpdateStatusLabel()
+    {
+        string evCounts = $"page={_pageStateEventCount} nav={_navStateEventCount}";
+        string cmd = string.IsNullOrEmpty(_lastCommandInfo) ? "no commands yet" : _lastCommandInfo;
+        statusLabel.Text = $"{cmd}  |  Events: {evCounts}";
+    }
+
+    private static string? TryGetString(JsonElement element, string property)
+    {
+        if (element.ValueKind == JsonValueKind.Object &&
+            element.TryGetProperty(property, out var prop) &&
+            prop.ValueKind == JsonValueKind.String)
+            return prop.GetString();
+        return null;
+    }
 
     private static string GetString(JsonElement element, string property, string defaultValue)
     {

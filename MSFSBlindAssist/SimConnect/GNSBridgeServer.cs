@@ -13,7 +13,9 @@ namespace MSFSBlindAssist.SimConnect
 
     public class GNSCommand
     {
+        [System.Text.Json.Serialization.JsonPropertyName("command")]
         public string Command { get; set; } = "";
+        [System.Text.Json.Serialization.JsonPropertyName("payload")]
         public Dictionary<string, object>? Payload { get; set; }
     }
 
@@ -230,6 +232,7 @@ namespace MSFSBlindAssist.SimConnect
 
                     case "command_ack":
                     case "command_error":
+                    case "debug_probe":
                         RaiseStateUpdated(type, data.Clone());
                         break;
 
