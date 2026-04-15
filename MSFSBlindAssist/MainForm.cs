@@ -33,6 +33,8 @@ public partial class MainForm : Form
     private FenixMCDUService? fenixMCDUService;
     private PMDG777CDUForm? pmdg777CDUForm;
     private PMDG777EFBForm? pmdg777EFBForm;
+    private GNSBridgeServer? gnsBridgeServer;
+    private Forms.GPS.GPSNavigatorForm? gpsNavigatorForm;
     private EFBBridgeServer? efbBridgeServer;
     private string? efbCommunityFolderPath;
     private TakeoffAssistManager takeoffAssistManager = null!;
@@ -116,6 +118,9 @@ public partial class MainForm : Form
             CheckAndOfferEFBModPackage();
             StartEFBBridgeServer();
         }
+
+        // Start GNS bridge server (universal — works for any aircraft with GNS 530/430 or G1000)
+        StartGNSBridgeServer();
 
         // Don't set focus - let default tab order handle it for proper menu accessibility
     }
@@ -1120,6 +1125,14 @@ public partial class MainForm : Form
             case HotkeyAction.DescribeScene:
                 DescribeSceneAsync();
                 break;
+            case HotkeyAction.ShowNavigationDisplay:
+                // For aircraft without a built-in ND (GA aircraft), open the GPS navigator
+                ShowGPSNavigatorDialog();
+                break;
+            case HotkeyAction.ShowPFD:
+                // For aircraft without a built-in PFD window, open the GPS navigator
+                ShowGPSNavigatorDialog();
+                break;
             // Note: FCU push/pull, autopilot toggles, FCU set value dialogs, and A32NX-specific hotkeys
             // are now handled by the aircraft definition via HandleHotkeyAction()
         }
@@ -1498,6 +1511,28 @@ public partial class MainForm : Form
         }
 
         efbBridgeServer?.Stop();
+    }
+
+    private void StartGNSBridgeServer()
+    {
+        if (gnsBridgeServer == null)
+        {
+            gnsBridgeServer = new GNSBridgeServer();
+        }
+        if (!gnsBridgeServer.IsRunning)
+        {
+            gnsBridgeServer.Start();
+        }
+    }
+
+    private void ShowGPSNavigatorDialog()
+    {
+        StartGNSBridgeServer();
+        if (gpsNavigatorForm == null || gpsNavigatorForm.IsDisposed)
+        {
+            gpsNavigatorForm = new Forms.GPS.GPSNavigatorForm(gnsBridgeServer!, simConnectManager, announcer);
+        }
+        gpsNavigatorForm.ShowForm();
     }
 
     private void ShowElectronicFlightBagDialog()

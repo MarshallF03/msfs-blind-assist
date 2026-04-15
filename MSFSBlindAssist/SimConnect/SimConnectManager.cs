@@ -3207,6 +3207,31 @@ public class SimConnectManager
         }
     }
 
+    /// <summary>
+    /// Request GPS waypoint info (next waypoint name, distance, bearing).
+    /// Result is fired via SimVarUpdated with VarName = "WAYPOINT_INFO" and Description containing the formatted string.
+    /// </summary>
+    public void RequestGPSWaypointInfo()
+    {
+        if (!IsConnected || simConnect == null) return;
+        try
+        {
+            var defId = (DATA_DEFINITIONS)370;
+            SafelyClearDataDefinition(defId, requestId: null, delayMs: 50);
+            simConnect.AddToDataDefinition(defId, "GPS WP NEXT ID", null, SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SIMCONNECT_UNUSED);
+            simConnect.AddToDataDefinition(defId, "GPS WP NEXT ID", null, SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SIMCONNECT_UNUSED);
+            simConnect.AddToDataDefinition(defId, "GPS WP DISTANCE", "meters", SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SIMCONNECT_UNUSED);
+            simConnect.AddToDataDefinition(defId, "GPS WP BEARING", "radians", SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SIMCONNECT_UNUSED);
+            simConnect.RegisterDataDefineStruct<WaypointInfo>(defId);
+            simConnect.RequestDataOnSimObject((DATA_REQUESTS)370, defId, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error requesting GPS waypoint info: {ex.Message}");
+        }
+    }
+
     public void SetSimVar(string varName, double value, string units = "number")
     {
         if (!IsConnected || simConnect == null) return;

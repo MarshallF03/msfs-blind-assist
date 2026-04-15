@@ -46,6 +46,121 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
     {
         return new Dictionary<string, SimConnect.SimVarDefinition>
         {
+            // ===== GPS NAVIGATION (universal — used by GPS Navigator form for all aircraft) =====
+
+            ["GPS_WP_DISTANCE"] = new SimConnect.SimVarDefinition
+            {
+                Name = "GPS WP DISTANCE",
+                DisplayName = "GPS Distance",
+                Type = SimConnect.SimVarType.SimVar,
+                Units = "nautical miles",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["GPS_WP_BEARING"] = new SimConnect.SimVarDefinition
+            {
+                Name = "GPS WP BEARING",
+                DisplayName = "GPS Bearing",
+                Type = SimConnect.SimVarType.SimVar,
+                Units = "degrees",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["GPS_WP_ETE"] = new SimConnect.SimVarDefinition
+            {
+                Name = "GPS WP ETE",
+                DisplayName = "GPS ETE",
+                Type = SimConnect.SimVarType.SimVar,
+                Units = "seconds",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["GPS_WP_DESIRED_TRACK"] = new SimConnect.SimVarDefinition
+            {
+                Name = "GPS WP DESIRED TRACK",
+                DisplayName = "GPS DTK",
+                Type = SimConnect.SimVarType.SimVar,
+                Units = "degrees",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["GPS_WP_CROSS_TRK"] = new SimConnect.SimVarDefinition
+            {
+                Name = "GPS WP CROSS TRK",
+                DisplayName = "GPS XTK",
+                Type = SimConnect.SimVarType.SimVar,
+                Units = "nautical miles",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["GPS_GROUND_SPEED"] = new SimConnect.SimVarDefinition
+            {
+                Name = "GPS GROUND SPEED",
+                DisplayName = "GPS Ground Speed",
+                Type = SimConnect.SimVarType.SimVar,
+                Units = "knots",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["GPS_FLIGHT_PLAN_WP_COUNT"] = new SimConnect.SimVarDefinition
+            {
+                Name = "GPS FLIGHT PLAN WP COUNT",
+                DisplayName = "GPS WP Count",
+                Type = SimConnect.SimVarType.SimVar,
+                Units = "number",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["GPS_FLIGHT_PLAN_WP_INDEX"] = new SimConnect.SimVarDefinition
+            {
+                Name = "GPS FLIGHT PLAN WP INDEX",
+                DisplayName = "GPS WP Index",
+                Type = SimConnect.SimVarType.SimVar,
+                Units = "number",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["GPS_IS_ACTIVE_FLIGHT_PLAN"] = new SimConnect.SimVarDefinition
+            {
+                Name = "GPS IS ACTIVE FLIGHT PLAN",
+                DisplayName = "GPS FPL Active",
+                Type = SimConnect.SimVarType.SimVar,
+                Units = "Bool",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["GPS_IS_DIRECTTO"] = new SimConnect.SimVarDefinition
+            {
+                Name = "GPS IS DIRECTTO FLIGHTPLAN",
+                DisplayName = "GPS Direct-To",
+                Type = SimConnect.SimVarType.SimVar,
+                Units = "Bool",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["GPS_DRIVES_NAV1"] = new SimConnect.SimVarDefinition
+            {
+                Name = "GPS DRIVES NAV1",
+                DisplayName = "GPS Drives NAV",
+                Type = SimConnect.SimVarType.SimVar,
+                Units = "Bool",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["GPS_APPROACH_LOADED"] = new SimConnect.SimVarDefinition
+            {
+                Name = "GPS IS APPROACH LOADED",
+                DisplayName = "Approach Loaded",
+                Type = SimConnect.SimVarType.SimVar,
+                Units = "Bool",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["GPS_APPROACH_ACTIVE"] = new SimConnect.SimVarDefinition
+            {
+                Name = "GPS IS APPROACH ACTIVE",
+                DisplayName = "Approach Active",
+                Type = SimConnect.SimVarType.SimVar,
+                Units = "Bool",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["GPS_COURSE_TO_STEER"] = new SimConnect.SimVarDefinition
+            {
+                Name = "GPS COURSE TO STEER",
+                DisplayName = "GPS Course",
+                Type = SimConnect.SimVarType.SimVar,
+                Units = "degrees",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+
             // Ground state - universal SimConnect variable that works with all aircraft
             ["SIM_ON_GROUND"] = new SimConnect.SimVarDefinition
             {

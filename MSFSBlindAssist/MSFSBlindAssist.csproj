@@ -103,6 +103,13 @@
     <None Update="Resources\pmdg-efb-accessibility-bridge.js">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- GPS Accessibility Bridge Scripts -->
+    <None Update="Resources\gns530-accessibility-bridge.js">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\g1000-accessibility-bridge.js">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
