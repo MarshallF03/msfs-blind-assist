@@ -18,6 +18,7 @@ namespace MSFSBlindAssist
         private System.Windows.Forms.ToolStripMenuItem flyByWireA320MenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem fenixA320MenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem pmdg777MenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem a2aComancheMenuItem = null!;
         private System.Windows.Forms.ListBox sectionsListBox = null!;
         private System.Windows.Forms.ListBox panelsListBox = null!;
         private System.Windows.Forms.Panel controlsContainer = null!;
@@ -49,6 +50,7 @@ namespace MSFSBlindAssist
             this.flyByWireA320MenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.fenixA320MenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.pmdg777MenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.a2aComancheMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.sectionsListBox = new System.Windows.Forms.ListBox();
             this.panelsListBox = new System.Windows.Forms.ListBox();
             this.controlsContainer = new System.Windows.Forms.Panel();
@@ -174,7 +176,8 @@ namespace MSFSBlindAssist
             this.aircraftMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.flyByWireA320MenuItem,
             this.fenixA320MenuItem,
-            this.pmdg777MenuItem});
+            this.pmdg777MenuItem,
+            this.a2aComancheMenuItem});
             this.aircraftMenuItem.Name = "aircraftMenuItem";
             this.aircraftMenuItem.Size = new System.Drawing.Size(75, 24);
             this.aircraftMenuItem.Text = "&Aircraft";
@@ -208,6 +211,16 @@ namespace MSFSBlindAssist
             this.pmdg777MenuItem.Text = "PMDG Boeing &777";
             this.pmdg777MenuItem.Checked = false;
             this.pmdg777MenuItem.Click += new System.EventHandler(this.PMDG777MenuItem_Click);
+            //
+            // a2aComancheMenuItem
+            //
+            this.a2aComancheMenuItem.AccessibleName = "A2A Comanche 250";
+            this.a2aComancheMenuItem.AccessibleDescription = "Switch to A2A Piper PA-24 Comanche 250";
+            this.a2aComancheMenuItem.Name = "a2aComancheMenuItem";
+            this.a2aComancheMenuItem.Size = new System.Drawing.Size(240, 26);
+            this.a2aComancheMenuItem.Text = "A2A &Comanche 250";
+            this.a2aComancheMenuItem.Checked = false;
+            this.a2aComancheMenuItem.Click += new System.EventHandler(this.A2AComancheMenuItem_Click);
             //
             // sectionsListBox
             // 

@@ -33,6 +33,7 @@ public partial class MainForm : Form
     private FenixMCDUService? fenixMCDUService;
     private PMDG777CDUForm? pmdg777CDUForm;
     private PMDG777EFBForm? pmdg777EFBForm;
+    private Forms.A2AComanche.A2AComancheHangarForm? comancheHangarForm;
     private EFBBridgeServer? efbBridgeServer;
     private string? efbCommunityFolderPath;
     private TakeoffAssistManager takeoffAssistManager = null!;
@@ -91,7 +92,7 @@ public partial class MainForm : Form
             "A320" => new FlyByWireA320Definition(),
             "FENIX_A320CEO" => new FenixA320Definition(),
             "PMDG_777" => new PMDG777Definition(),
-            // Future aircraft will be added here
+            "A2A_COMANCHE" => new A2AComancheDefinition(),
             _ => new FlyByWireA320Definition() // Default to A320
         };
     }
@@ -1054,7 +1055,14 @@ public partial class MainForm : Form
                 ShowChecklistDialog();
                 break;
             case HotkeyAction.ShowElectronicFlightBag:
-                ShowElectronicFlightBagDialog();
+                if (currentAircraft is A2AComancheDefinition)
+                {
+                    ShowComancheHangarDialog();
+                }
+                else
+                {
+                    ShowElectronicFlightBagDialog();
+                }
                 break;
             case HotkeyAction.ShowFenixMCDU:
                 if (currentAircraft?.AircraftCode == "PMDG_777" && simConnectManager.PMDG777DataManager != null)
@@ -1422,6 +1430,16 @@ public partial class MainForm : Form
         }
 
         pmdg777EFBForm.ShowForm();
+    }
+
+    private void ShowComancheHangarDialog()
+    {
+        if (comancheHangarForm == null || comancheHangarForm.IsDisposed)
+        {
+            comancheHangarForm = new Forms.A2AComanche.A2AComancheHangarForm(simConnectManager, announcer);
+        }
+        comancheHangarForm.ShowForm();
+        comancheHangarForm.RefreshData();
     }
 
     private void CheckAndOfferEFBModPackage()
@@ -2205,6 +2223,12 @@ public partial class MainForm : Form
         SwitchAircraft(new PMDG777Definition());
     }
 
+    private void A2AComancheMenuItem_Click(object? sender, EventArgs e)
+    {
+        SwitchAircraft(new A2AComancheDefinition());
+    }
+
+
     private void SwitchAircraft(IAircraftDefinition newAircraft)
     {
         // Update the aircraft instance
@@ -2291,6 +2315,13 @@ public partial class MainForm : Form
             pmdg777EFBForm = null;
         }
 
+        // Dispose Comanche hangar form when switching aircraft
+        if (comancheHangarForm != null && !comancheHangarForm.IsDisposed)
+        {
+            comancheHangarForm.Dispose();
+            comancheHangarForm = null;
+        }
+
         // PMDG 777 data manager lifecycle
         if (newAircraft.AircraftCode == "PMDG_777" && simConnectManager.IsConnected)
         {
@@ -2357,6 +2388,7 @@ public partial class MainForm : Form
         flyByWireA320MenuItem.Checked = false;
         fenixA320MenuItem.Checked = false;
         pmdg777MenuItem.Checked = false;
+        a2aComancheMenuItem.Checked = false;
 
         // Set the check on the current aircraft's menu item
         if (currentAircraft is FlyByWireA320Definition)
@@ -2370,6 +2402,10 @@ public partial class MainForm : Form
         else if (currentAircraft is PMDG777Definition)
         {
             pmdg777MenuItem.Checked = true;
+        }
+        else if (currentAircraft is A2AComancheDefinition)
+        {
+            a2aComancheMenuItem.Checked = true;
         }
     }
 
