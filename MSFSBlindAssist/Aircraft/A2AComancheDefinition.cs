@@ -17,7 +17,6 @@ public class A2AComancheDefinition : BaseAircraftDefinition
     // Warning debounce tracking
     private bool _lowFuelLeftWarned = false;
     private bool _lowFuelRightWarned = false;
-    private bool _lowFuelAuxWarned = false;
     private bool _lowOilPressureWarned = false;
     private bool _highCHTWarned = false;
     private bool _rpmRedlineWarned = false;
@@ -883,10 +882,11 @@ public class A2AComancheDefinition : BaseAircraftDefinition
                 UpdateFrequency = SimConnect.UpdateFrequency.Continuous,
                 IsAnnounced = true
             },
+            // Fuel tank quantities — use the A2A tank L-vars (actual gallons), not FuelGauge1/2/3 (gauge needle positions)
             ["CMNCH_FUEL_LEFT"] = new SimConnect.SimVarDefinition
             {
-                Name = "FuelGauge1",
-                DisplayName = "Left Fuel",
+                Name = "FuelLeftWingTank",
+                DisplayName = "Left Wing Fuel",
                 Type = SimConnect.SimVarType.LVar,
                 Units = "gallons",
                 UpdateFrequency = SimConnect.UpdateFrequency.Continuous,
@@ -894,21 +894,38 @@ public class A2AComancheDefinition : BaseAircraftDefinition
             },
             ["CMNCH_FUEL_RIGHT"] = new SimConnect.SimVarDefinition
             {
-                Name = "FuelGauge2",
-                DisplayName = "Right Fuel",
+                Name = "FuelRightWingTank",
+                DisplayName = "Right Wing Fuel",
                 Type = SimConnect.SimVarType.LVar,
                 Units = "gallons",
                 UpdateFrequency = SimConnect.UpdateFrequency.Continuous,
                 IsAnnounced = true
             },
-            ["CMNCH_FUEL_AUX"] = new SimConnect.SimVarDefinition
+            ["CMNCH_FUEL_TIP_LEFT"] = new SimConnect.SimVarDefinition
             {
-                Name = "FuelGauge3",
-                DisplayName = "Aux Fuel",
+                Name = "FuelLeftTipTank",
+                DisplayName = "Left Tip Fuel",
                 Type = SimConnect.SimVarType.LVar,
                 Units = "gallons",
                 UpdateFrequency = SimConnect.UpdateFrequency.Continuous,
                 IsAnnounced = true
+            },
+            ["CMNCH_FUEL_TIP_RIGHT"] = new SimConnect.SimVarDefinition
+            {
+                Name = "FuelRightTipTank",
+                DisplayName = "Right Tip Fuel",
+                Type = SimConnect.SimVarType.LVar,
+                Units = "gallons",
+                UpdateFrequency = SimConnect.UpdateFrequency.Continuous,
+                IsAnnounced = true
+            },
+            ["CMNCH_TIP_TANKS_INSTALLED"] = new SimConnect.SimVarDefinition
+            {
+                Name = "TipTank",
+                DisplayName = "Tip Tanks Installed",
+                Type = SimConnect.SimVarType.LVar,
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest,
+                ValueDescriptions = new Dictionary<double, string> { [0] = "No", [1] = "Yes" }
             },
             ["CMNCH_STALL_WARNING"] = new SimConnect.SimVarDefinition
             {
@@ -984,7 +1001,93 @@ public class A2AComancheDefinition : BaseAircraftDefinition
                 Type = SimConnect.SimVarType.LVar,
                 UpdateFrequency = SimConnect.UpdateFrequency.OnRequest,
                 ValueDescriptions = new Dictionary<double, string> { [0] = "Removed", [1] = "Installed" }
-            }
+            },
+
+            // ===== MAINTENANCE / HANGAR VARIABLES (OnRequest, read by hangar form) =====
+
+            ["CMNCH_MAINT_ENGINE_HOURS"] = new SimConnect.SimVarDefinition
+            {
+                Name = "Eng1_Time",
+                DisplayName = "Engine Hours",
+                Type = SimConnect.SimVarType.LVar,
+                Units = "hours",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["CMNCH_MAINT_AIRFRAME_HOURS"] = new SimConnect.SimVarDefinition
+            {
+                Name = "TotalTime",
+                DisplayName = "Airframe Hours",
+                Type = SimConnect.SimVarType.LVar,
+                Units = "hours",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["CMNCH_MAINT_OIL_QTY"] = new SimConnect.SimVarDefinition
+            {
+                Name = "Eng1_OilQuantity",
+                DisplayName = "Oil Quantity",
+                Type = SimConnect.SimVarType.LVar,
+                Units = "number",
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["CMNCH_MAINT_OIL_GRADE"] = new SimConnect.SimVarDefinition
+            {
+                Name = "Eng1_OilGrade",
+                DisplayName = "Oil Grade",
+                Type = SimConnect.SimVarType.LVar,
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            ["CMNCH_MAINT_SPARK_TYPE"] = new SimConnect.SimVarDefinition
+            {
+                Name = "Eng1_SparkPlugType",
+                DisplayName = "Spark Plug Type",
+                Type = SimConnect.SimVarType.LVar,
+                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest
+            },
+            // Cylinder compression (6 cylinders)
+            ["CMNCH_MAINT_COMP_1"] = new SimConnect.SimVarDefinition { Name = "Eng1_CylComp[1]", DisplayName = "Cyl 1 Compression", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_COMP_2"] = new SimConnect.SimVarDefinition { Name = "Eng1_CylComp[2]", DisplayName = "Cyl 2 Compression", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_COMP_3"] = new SimConnect.SimVarDefinition { Name = "Eng1_CylComp[3]", DisplayName = "Cyl 3 Compression", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_COMP_4"] = new SimConnect.SimVarDefinition { Name = "Eng1_CylComp[4]", DisplayName = "Cyl 4 Compression", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_COMP_5"] = new SimConnect.SimVarDefinition { Name = "Eng1_CylComp[5]", DisplayName = "Cyl 5 Compression", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_COMP_6"] = new SimConnect.SimVarDefinition { Name = "Eng1_CylComp[6]", DisplayName = "Cyl 6 Compression", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            // Spark plugs (6 cylinders x 2 = 12)
+            ["CMNCH_MAINT_PLUG_1L"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Cyl1_SparkPlugL", DisplayName = "Cyl 1 Left Plug", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_PLUG_1R"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Cyl1_SparkPlugR", DisplayName = "Cyl 1 Right Plug", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_PLUG_2L"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Cyl2_SparkPlugL", DisplayName = "Cyl 2 Left Plug", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_PLUG_2R"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Cyl2_SparkPlugR", DisplayName = "Cyl 2 Right Plug", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_PLUG_3L"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Cyl3_SparkPlugL", DisplayName = "Cyl 3 Left Plug", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_PLUG_3R"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Cyl3_SparkPlugR", DisplayName = "Cyl 3 Right Plug", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_PLUG_4L"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Cyl4_SparkPlugL", DisplayName = "Cyl 4 Left Plug", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_PLUG_4R"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Cyl4_SparkPlugR", DisplayName = "Cyl 4 Right Plug", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_PLUG_5L"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Cyl5_SparkPlugL", DisplayName = "Cyl 5 Left Plug", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_PLUG_5R"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Cyl5_SparkPlugR", DisplayName = "Cyl 5 Right Plug", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_PLUG_6L"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Cyl6_SparkPlugL", DisplayName = "Cyl 6 Left Plug", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_PLUG_6R"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Cyl6_SparkPlugR", DisplayName = "Cyl 6 Right Plug", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            // Component conditions
+            ["CMNCH_MAINT_C_MAIN"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Main", DisplayName = "Crankshaft", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_CARB"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Carb", DisplayName = "Carburetor", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_MAGL"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_MagL", DisplayName = "Left Magneto", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_MAGR"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_MagR", DisplayName = "Right Magneto", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_OILPUMP"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_OilPump", DisplayName = "Oil Pump", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_OILSYS"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Oilsystem", DisplayName = "Oil System", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_FUELPUMP_M"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_FuelPumpMechanical", DisplayName = "Fuel Pump Mech", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_FUELPUMP_E"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_FuelPumpElectrical", DisplayName = "Fuel Pump Elec", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_FUELSYS"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Fuelsystem", DisplayName = "Fuel System", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_AIRFILTER"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_AirFilter", DisplayName = "Air Filter", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_VACUUM"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_VacuumPump", DisplayName = "Vacuum Pump", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_GENERATOR"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Generator", DisplayName = "Generator", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_STARTER"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Starter", DisplayName = "Starter", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_PROP"] = new SimConnect.SimVarDefinition { Name = "C_Eng1_Prop", DisplayName = "Propeller", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_BATT"] = new SimConnect.SimVarDefinition { Name = "C_Battery1", DisplayName = "Battery", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_TIREL"] = new SimConnect.SimVarDefinition { Name = "C_TireLeft", DisplayName = "Left Tire", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_TIRER"] = new SimConnect.SimVarDefinition { Name = "C_TireRight", DisplayName = "Right Tire", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_TIREC"] = new SimConnect.SimVarDefinition { Name = "C_TireCenter", DisplayName = "Nose Tire", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_BRAKEL"] = new SimConnect.SimVarDefinition { Name = "C_BrakesLeft", DisplayName = "Left Brakes", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_BRAKER"] = new SimConnect.SimVarDefinition { Name = "C_BrakesRight", DisplayName = "Right Brakes", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_GEARL"] = new SimConnect.SimVarDefinition { Name = "C_GearLeft", DisplayName = "Left Gear", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_GEARR"] = new SimConnect.SimVarDefinition { Name = "C_GearRight", DisplayName = "Right Gear", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_GEARC"] = new SimConnect.SimVarDefinition { Name = "C_GearCenter", DisplayName = "Nose Gear", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest },
+            ["CMNCH_MAINT_C_GEARMOTOR"] = new SimConnect.SimVarDefinition { Name = "C_GearMainMotor", DisplayName = "Gear Motor", Type = SimConnect.SimVarType.LVar, UpdateFrequency = SimConnect.UpdateFrequency.OnRequest }
         };
 
         foreach (var kvp in comancheVars)
@@ -1112,7 +1215,7 @@ public class A2AComancheDefinition : BaseAircraftDefinition
         return new Dictionary<string, List<string>>
         {
             ["Battery and Generator"] = new List<string> { "CMNCH_AMMETER" },
-            ["Fuel System"] = new List<string> { "CMNCH_FUEL_LEFT", "CMNCH_FUEL_RIGHT", "CMNCH_FUEL_AUX" },
+            ["Fuel System"] = new List<string> { "CMNCH_FUEL_LEFT", "CMNCH_FUEL_RIGHT", "CMNCH_FUEL_TIP_LEFT", "CMNCH_FUEL_TIP_RIGHT" },
             ["Engine Controls"] = new List<string>
             {
                 "CMNCH_ENGINE_RPM", "CMNCH_MANIFOLD_PRESSURE", "CMNCH_EGT", "CMNCH_CHT",
@@ -1165,24 +1268,37 @@ public class A2AComancheDefinition : BaseAircraftDefinition
                 return true;
             }
 
-            // Output+F — read fuel quantity (3 tanks)
+            // Output+F — read fuel quantity (all 4 tanks: wing + tip)
             case HotkeyAction.ReadFuelQuantity:
             {
                 double? left = simConnect.GetCachedVariableValue("CMNCH_FUEL_LEFT");
                 double? right = simConnect.GetCachedVariableValue("CMNCH_FUEL_RIGHT");
-                double? aux = simConnect.GetCachedVariableValue("CMNCH_FUEL_AUX");
+                double? tipLeft = simConnect.GetCachedVariableValue("CMNCH_FUEL_TIP_LEFT");
+                double? tipRight = simConnect.GetCachedVariableValue("CMNCH_FUEL_TIP_RIGHT");
+                double? tipInstalled = simConnect.GetCachedVariableValue("CMNCH_TIP_TANKS_INSTALLED");
+
                 if (left.HasValue && right.HasValue)
                 {
-                    double total = left.Value + right.Value + (aux.GetValueOrDefault());
-                    string auxText = aux.HasValue ? $", Auxiliary {aux.Value:F1}" : "";
+                    bool hasTips = tipInstalled.HasValue && tipInstalled.Value > 0.5;
+                    double total = left.Value + right.Value;
+                    string tipText = "";
+                    if (hasTips)
+                    {
+                        double tipL = tipLeft.GetValueOrDefault();
+                        double tipR = tipRight.GetValueOrDefault();
+                        total += tipL + tipR;
+                        tipText = $", Left Tip {tipL:F1}, Right Tip {tipR:F1}";
+                    }
                     announcer.AnnounceImmediate(
-                        $"Left {left.Value:F1}, Right {right.Value:F1}{auxText}, Total {total:F1} gallons");
+                        $"Left Wing {left.Value:F1}, Right Wing {right.Value:F1}{tipText}, Total {total:F1} gallons");
                 }
                 else
                 {
                     simConnect.RequestVariable("CMNCH_FUEL_LEFT");
                     simConnect.RequestVariable("CMNCH_FUEL_RIGHT");
-                    simConnect.RequestVariable("CMNCH_FUEL_AUX");
+                    simConnect.RequestVariable("CMNCH_FUEL_TIP_LEFT");
+                    simConnect.RequestVariable("CMNCH_FUEL_TIP_RIGHT");
+                    simConnect.RequestVariable("CMNCH_TIP_TANKS_INSTALLED");
                     announcer.AnnounceImmediate("Requesting fuel quantity");
                 }
                 return true;
@@ -1193,18 +1309,29 @@ public class A2AComancheDefinition : BaseAircraftDefinition
             {
                 double? left = simConnect.GetCachedVariableValue("CMNCH_FUEL_LEFT");
                 double? right = simConnect.GetCachedVariableValue("CMNCH_FUEL_RIGHT");
-                double? aux = simConnect.GetCachedVariableValue("CMNCH_FUEL_AUX");
+                double? tipLeft = simConnect.GetCachedVariableValue("CMNCH_FUEL_TIP_LEFT");
+                double? tipRight = simConnect.GetCachedVariableValue("CMNCH_FUEL_TIP_RIGHT");
+                double? tipInstalled = simConnect.GetCachedVariableValue("CMNCH_TIP_TANKS_INSTALLED");
                 double? flow = simConnect.GetCachedVariableValue("CMNCH_FUEL_FLOW");
+
                 if (left.HasValue && right.HasValue)
                 {
-                    double total = left.Value + right.Value + (aux.GetValueOrDefault());
+                    bool hasTips = tipInstalled.HasValue && tipInstalled.Value > 0.5;
+                    double total = left.Value + right.Value;
+                    string tipText = "";
+                    if (hasTips)
+                    {
+                        double tipL = tipLeft.GetValueOrDefault();
+                        double tipR = tipRight.GetValueOrDefault();
+                        total += tipL + tipR;
+                        tipText = $", Tips {tipL + tipR:F1}";
+                    }
                     string flowText = flow.HasValue ? $", Flow {flow.Value:F1} G P H" : "";
                     double? endurance = (flow.HasValue && flow.Value > 0.5) ? total / flow.Value : null;
                     string enduranceText = endurance.HasValue
                         ? $", Endurance {endurance.Value:F1} hours" : "";
-                    string auxText = aux.HasValue ? $", Auxiliary {aux.Value:F1}" : "";
                     announcer.AnnounceImmediate(
-                        $"Left {left.Value:F1}, Right {right.Value:F1}{auxText}, Total {total:F1} gallons{flowText}{enduranceText}");
+                        $"Left {left.Value:F1}, Right {right.Value:F1}{tipText}, Total {total:F1} gallons{flowText}{enduranceText}");
                 }
                 else
                 {
@@ -1367,14 +1494,9 @@ public class A2AComancheDefinition : BaseAircraftDefinition
             else if (value >= 3.0) _lowFuelRightWarned = false;
             return true;
         }
-        if (varName == "CMNCH_FUEL_AUX")
+        if (varName == "CMNCH_FUEL_TIP_LEFT" || varName == "CMNCH_FUEL_TIP_RIGHT")
         {
-            if (value > 0 && value < 3.0 && !_lowFuelAuxWarned)
-            {
-                announcer.Announce($"Warning: Auxiliary fuel low, {value:F1} gallons");
-                _lowFuelAuxWarned = true;
-            }
-            else if (value >= 3.0) _lowFuelAuxWarned = false;
+            // Silence continuous tip tank updates — low-fuel warning on main tanks is sufficient
             return true;
         }
 
