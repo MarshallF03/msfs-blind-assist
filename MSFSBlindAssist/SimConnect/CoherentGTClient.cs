@@ -306,24 +306,72 @@ public sealed class CoherentGTClient : IDisposable
 
     /// <summary>
     /// Returns all debuggable target titles/URLs on a given port, for diagnostics.
+    /// Tries /json and /json/list endpoints.
     /// </summary>
     public static async Task<List<(string title, string url)>> ListTargetsAsync(int port = 9999)
     {
         var results = new List<(string, string)>();
-        try
+        foreach (string path in new[] { "/json", "/json/list" })
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
-            string json = await http.GetStringAsync($"http://127.0.0.1:{port}/json");
-            using var doc = JsonDocument.Parse(json);
-            foreach (var t in doc.RootElement.EnumerateArray())
+            try
             {
-                string title = t.TryGetProperty("title", out var tt) ? tt.GetString() ?? "" : "";
-                string url   = t.TryGetProperty("url",   out var uu) ? uu.GetString() ?? "" : "";
-                results.Add((title, url));
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+                string body = await http.GetStringAsync($"http://127.0.0.1:{port}{path}");
+                using var doc = JsonDocument.Parse(body);
+                var root = doc.RootElement;
+                // Handle both array at root and {targets:[...]} wrapper
+                var arr = root.ValueKind == JsonValueKind.Array ? root
+                        : root.TryGetProperty("targets", out var t) ? t : root;
+                if (arr.ValueKind == JsonValueKind.Array)
+                    foreach (var item in arr.EnumerateArray())
+                    {
+                        string title = item.TryGetProperty("title", out var tt) ? tt.GetString() ?? "" : "";
+                        string url   = item.TryGetProperty("url",   out var uu) ? uu.GetString() ?? "" : "";
+                        results.Add((title, url));
+                    }
+                if (results.Count > 0) return results;
             }
+            catch { }
         }
-        catch { }
         return results;
+    }
+
+    /// <summary>
+    /// Full connection diagnostic: probes all known ports and endpoints and returns
+    /// a human-readable report. Use the "Diagnose" button in G1000NavigatorForm.
+    /// </summary>
+    public static async Task<string> DiagnoseAsync()
+    {
+        var sb = new StringBuilder();
+        int[] ports = { 9999, 19999, 9222, 19998 };
+        string[] paths = { "/json", "/json/list", "/", "/devtools/browser" };
+
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+
+        foreach (int port in ports)
+        {
+            bool anyHit = false;
+            foreach (string path in paths)
+            {
+                try
+                {
+                    var resp = await http.GetAsync($"http://127.0.0.1:{port}{path}");
+                    string body = await resp.Content.ReadAsStringAsync();
+                    string preview = body.Length > 200 ? body[..200] + "…" : body;
+                    sb.AppendLine($"Port {port}{path}  →  HTTP {(int)resp.StatusCode}");
+                    sb.AppendLine($"  Body: {preview.Replace('\n', ' ').Replace('\r', ' ')}");
+                    anyHit = true;
+                }
+                catch (Exception ex)
+                {
+                    sb.AppendLine($"Port {port}{path}  →  {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+            if (anyHit) sb.AppendLine();
+        }
+
+        if (sb.Length == 0) sb.AppendLine("No ports responded.");
+        return sb.ToString();
     }
 
     public void Dispose()

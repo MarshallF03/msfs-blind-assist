@@ -249,11 +249,15 @@ public sealed class G1000NavigatorForm : Form
         var refreshBtn = new Button { Dock = DockStyle.Top, Height = 28, Text = "&Refresh (F5)" };
         refreshBtn.Click += async (_, _) => await RefreshAsync();
 
+        var diagnoseBtn = new Button { Dock = DockStyle.Top, Height = 28, Text = "&Diagnose connection" };
+        diagnoseBtn.Click += async (_, _) => await ShowDiagnosticsAsync();
+
         page.Controls.Add(_fplBox);
         page.Controls.Add(fplLabel);
         page.Controls.Add(_waypointBox);
         page.Controls.Add(wpLabel);
         page.Controls.Add(refreshBtn);
+        page.Controls.Add(diagnoseBtn);
         return page;
     }
 
@@ -426,6 +430,42 @@ public sealed class G1000NavigatorForm : Form
 
         SetStatus($"Connected — {_client.ConnectedTargetTitle}  •  F5 to refresh");
         _announcer.AnnounceImmediate(legText);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Diagnostics
+    // ─────────────────────────────────────────────────────────────────────
+
+    private async Task ShowDiagnosticsAsync()
+    {
+        SetStatus("Running connection diagnostics — probing ports 9999, 19999, 9222…");
+        _announcer.AnnounceImmediate("Running connection diagnostics, please wait");
+
+        string report = await CoherentGTClient.DiagnoseAsync();
+
+        // Show in a simple scrollable text window
+        var diagForm = new Form
+        {
+            Text = "G1000 Connection Diagnostics",
+            Size = new Size(700, 500),
+            StartPosition = FormStartPosition.CenterParent
+        };
+        var box = new TextBox
+        {
+            Dock = DockStyle.Fill, Multiline = true, ReadOnly = true,
+            ScrollBars = ScrollBars.Vertical, Font = new Font("Courier New", 9),
+            Text = report + "\r\n\r\nHINTS:\r\n" +
+                   "• Port responding with HTML/JSON  → Coherent GT server is running. Check target filter.\r\n" +
+                   "• Connection refused on all ports → Dev mode may need a flight restart, OR MSFS 2024\r\n" +
+                   "  requires the SDK Debugger.exe to create the bridge (see below).\r\n" +
+                   "• MSFS 2024 SDK path: SDK\\Tools\\CoherentGT\\Debugger.exe\r\n" +
+                   "  Run it while in a flight to bridge Coherent GT to port 9999/19999.\r\n" +
+                   "• Make sure the G1000 avionics are powered on and the MFD is initialised.\r\n"
+        };
+        diagForm.Controls.Add(box);
+        diagForm.ShowDialog(this);
+
+        SetStatus($"Diagnostics shown — {_client.ConnectedTargetTitle ?? "not connected"}");
     }
 
     // ─────────────────────────────────────────────────────────────────────
