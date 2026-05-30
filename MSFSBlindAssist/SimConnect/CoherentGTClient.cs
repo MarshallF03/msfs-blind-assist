@@ -116,6 +116,20 @@ public sealed class CoherentGTClient : IDisposable
     /// </summary>
     public async Task<string?> EvaluateAsync(string expression, int timeoutMs = 5000,
         CancellationToken ct = default)
+        => await EvaluateInternalAsync(expression, awaitPromise: false, timeoutMs, ct);
+
+    /// <summary>
+    /// Evaluate an expression that returns a Promise (e.g. async function calls).
+    /// Passes awaitPromise:true so the debugger waits for the Promise to settle
+    /// before returning the resolved value. Supported by Coherent GT 2.x+.
+    /// Use for: fms.emptyPrimaryFlightPlan(), fms.facLoader.getFacility(), etc.
+    /// </summary>
+    public async Task<string?> EvaluatePromiseAsync(string expression, int timeoutMs = 10000,
+        CancellationToken ct = default)
+        => await EvaluateInternalAsync(expression, awaitPromise: true, timeoutMs, ct);
+
+    private async Task<string?> EvaluateInternalAsync(string expression, bool awaitPromise,
+        int timeoutMs, CancellationToken ct)
     {
         if (_ws?.State != WebSocketState.Open) return null;
 
@@ -125,7 +139,9 @@ public sealed class CoherentGTClient : IDisposable
 
         // Serialise safely — the expression may contain quotes and backslashes
         string escapedExpr = JsonSerializer.Serialize(expression); // includes surrounding quotes
-        string msg = $"{{\"id\":{id},\"method\":\"Runtime.evaluate\",\"params\":{{\"expression\":{escapedExpr},\"returnByValue\":true,\"generatePreview\":false}}}}";
+        string awaitPart = awaitPromise ? ",\"awaitPromise\":true" : "";
+        string msg = $"{{\"id\":{id},\"method\":\"Runtime.evaluate\",\"params\":{{\"expression\":{escapedExpr},\"returnByValue\":true,\"generatePreview\":false{awaitPart}}}}}";
+
 
         try
         {
