@@ -71,8 +71,8 @@ public partial class MainForm : Form
     private GsxService? _gsxService;
     private Forms.AccessGSXForm? _accessGsxForm;
 
-    // G1000 NXi Coherent GT debugger client (used when C172 G1000 is loaded)
-    private MSFSBlindAssist.SimConnect.CoherentGTClient? _g1000Client;
+    // G1000 NXi accessibility bridge (mod-package injection, port 19779)
+    private MSFSBlindAssist.SimConnect.G1000BridgeServer? _g1000Bridge;
     private Forms.GPS.G1000NavigatorForm? _g1000NavigatorForm;
 
     // Latest SIM_ON_GROUND sample. Cached unconditionally from the SIM_ON_GROUND
@@ -203,6 +203,10 @@ public partial class MainForm : Form
             if (currentAircraft is HorizonSim787Definition hs787defInit)
                 hs787defInit.BridgeServer = hs787BridgeServer;
         }
+
+        // Install G1000 bridge mod package if C172 G1000 is default aircraft
+        if (currentAircraft?.AircraftCode == "C172_G1000")
+            CheckAndOfferG1000ModPackage();
 
         // Don't set focus - let default tab order handle it for proper menu accessibility
     }
@@ -1773,12 +1777,15 @@ public partial class MainForm : Form
     /// </summary>
     private void ShowG1000NavigatorForm()
     {
-        if (_g1000Client == null)
-            _g1000Client = new MSFSBlindAssist.SimConnect.CoherentGTClient();
+        if (_g1000Bridge == null)
+        {
+            _g1000Bridge = new MSFSBlindAssist.SimConnect.G1000BridgeServer();
+            _g1000Bridge.Start();
+        }
 
         if (_g1000NavigatorForm == null || _g1000NavigatorForm.IsDisposed)
             _g1000NavigatorForm = new Forms.GPS.G1000NavigatorForm(
-                _g1000Client, announcer,
+                _g1000Bridge, announcer,
                 MSFSBlindAssist.Settings.SettingsManager.Current.SimbriefUsername ?? "");
 
         if (!_g1000NavigatorForm.Visible)
@@ -1787,9 +1794,18 @@ public partial class MainForm : Form
         _g1000NavigatorForm.TopMost = false;
         _g1000NavigatorForm.BringToFront();
         _g1000NavigatorForm.Activate();
+    }
 
-        // Kick off connect + refresh in the background so the form opens instantly
-        _ = _g1000NavigatorForm.ConnectAndRefreshAsync();
+    private void CheckAndOfferG1000ModPackage()
+    {
+        if (Patching.G1000ModPackageManager.IsInstalled()) return;
+
+        var (success, needsRestart, msg) = Patching.G1000ModPackageManager.InstallOrUpdate();
+        if (success && needsRestart)
+            announcer.AnnounceImmediate(
+                "G1000 accessibility bridge installed. Please restart the simulator to activate it.");
+        else if (!success)
+            announcer.AnnounceImmediate($"G1000 bridge install failed: {msg}");
     }
 
     /// <summary>
@@ -3909,17 +3925,11 @@ public partial class MainForm : Form
             comancheHangarForm = null;
         }
 
-        // Disconnect G1000 client when switching away (reconnects lazily on next open)
+        // Dispose G1000 navigator form when switching aircraft
         if (_g1000NavigatorForm != null && !_g1000NavigatorForm.IsDisposed)
         {
             _g1000NavigatorForm.Dispose();
             _g1000NavigatorForm = null;
-        }
-        _g1000Client?.Disconnect();
-        if (!(newAircraft is CessnaC172G1000Definition))
-        {
-            _g1000Client?.Dispose();
-            _g1000Client = null;
         }
 
         if (hs787SimBriefForm != null && !hs787SimBriefForm.IsDisposed)
@@ -3982,6 +3992,18 @@ public partial class MainForm : Form
         else
         {
             StopHS787BridgeServer();
+        }
+
+        // G1000 bridge: install mod package when switching to C172 G1000
+        if (newAircraft.AircraftCode == "C172_G1000")
+        {
+            CheckAndOfferG1000ModPackage();
+            if (_g1000Bridge == null) { _g1000Bridge = new MSFSBlindAssist.SimConnect.G1000BridgeServer(); _g1000Bridge.Start(); }
+        }
+        else
+        {
+            // Stop bridge server when switching away
+            _g1000Bridge?.Stop();
         }
 
         // Rebuild sections from new aircraft structure
@@ -5775,8 +5797,8 @@ public partial class MainForm : Form
 
         _g1000NavigatorForm?.Dispose();
         _g1000NavigatorForm = null;
-        _g1000Client?.Dispose();
-        _g1000Client = null;
+        _g1000Bridge?.Dispose();
+        _g1000Bridge = null;
 
         // Clean up managers and resources
         hotkeyManager?.Cleanup();
