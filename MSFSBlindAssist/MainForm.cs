@@ -1617,6 +1617,10 @@ public partial class MainForm : Form
                 {
                     ShowHS787FMCDialog();
                 }
+                else if (currentAircraft?.AircraftCode == "C172_G1000")
+                {
+                    ShowG1000NavigatorForm();
+                }
                 else
                 {
                     ShowFenixMCDUDialog();

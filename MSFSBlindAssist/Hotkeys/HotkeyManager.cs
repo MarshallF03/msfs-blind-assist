@@ -883,7 +883,7 @@ public class HotkeyManager : IDisposable
             // Alt+G is taken by Nearest Ground Traffic, but each mode has its
             // own registration set so they don't collide.
             RegisterHotKey(windowHandle, HOTKEY_ACCESS_GSX, MOD_ALT, 0x47);             // Alt+G (Open Access GSX window)
-            RegisterHotKey(windowHandle, HOTKEY_G1000_NAVIGATOR, MOD_SHIFT, 0x47);     // Shift+G (Open G1000 Navigator)
+            // G1000 Navigator uses the shared Shift+M (ShowFenixMCDU) dispatch — no separate hotkey needed
 
             InputHotkeyModeChanged?.Invoke(this, new HotkeyModeEventArgs(HotkeyModeStatus.Activated));
         }
@@ -932,7 +932,6 @@ public class HotkeyManager : IDisposable
 
             // Access GSX (Input mode Alt+G).
             UnregisterHotKey(windowHandle, HOTKEY_ACCESS_GSX);
-            UnregisterHotKey(windowHandle, HOTKEY_G1000_NAVIGATOR);
 
             InputHotkeyModeChanged?.Invoke(this, new HotkeyModeEventArgs(wasCancelled ? HotkeyModeStatus.Cancelled : HotkeyModeStatus.Deactivated));
         }
