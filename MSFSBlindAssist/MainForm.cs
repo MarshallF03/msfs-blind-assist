@@ -1773,7 +1773,9 @@ public partial class MainForm : Form
             _g1000Client = new MSFSBlindAssist.SimConnect.CoherentGTClient();
 
         if (_g1000NavigatorForm == null || _g1000NavigatorForm.IsDisposed)
-            _g1000NavigatorForm = new Forms.GPS.G1000NavigatorForm(_g1000Client, announcer);
+            _g1000NavigatorForm = new Forms.GPS.G1000NavigatorForm(
+                _g1000Client, announcer,
+                MSFSBlindAssist.Settings.SettingsManager.Current.SimbriefUsername ?? "");
 
         if (!_g1000NavigatorForm.Visible)
             _g1000NavigatorForm.Show();

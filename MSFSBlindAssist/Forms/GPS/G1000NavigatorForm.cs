@@ -1,4 +1,5 @@
 using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.Services;
 using MSFSBlindAssist.SimConnect;
 using System.Text;
 using System.Text.Json;
@@ -24,6 +25,7 @@ public sealed class G1000NavigatorForm : Form
 
     private readonly CoherentGTClient _client;
     private readonly ScreenReaderAnnouncer _announcer;
+    private readonly string _simbriefUsername;
 
     // Procedure state: once an airport's facility is loaded into JS window._msfsba_*,
     // we keep the procedure lists here so dropdowns stay populated between operations.
@@ -177,10 +179,12 @@ public sealed class G1000NavigatorForm : Form
     // Constructor
     // ─────────────────────────────────────────────────────────────────────
 
-    public G1000NavigatorForm(CoherentGTClient client, ScreenReaderAnnouncer announcer)
+    public G1000NavigatorForm(CoherentGTClient client, ScreenReaderAnnouncer announcer,
+        string simbriefUsername = "")
     {
-        _client   = client   ?? throw new ArgumentNullException(nameof(client));
-        _announcer = announcer ?? throw new ArgumentNullException(nameof(announcer));
+        _client           = client   ?? throw new ArgumentNullException(nameof(client));
+        _announcer        = announcer ?? throw new ArgumentNullException(nameof(announcer));
+        _simbriefUsername = simbriefUsername;
 
         BuildUi();
         KeyDown += (_, e) =>
@@ -336,6 +340,20 @@ public sealed class G1000NavigatorForm : Form
         {
             if (e.KeyCode == Keys.Return) { _ = ExecuteDirectToAsync(); e.Handled = e.SuppressKeyPress = true; }
         };
+
+        y += 12;
+        AddSectionLabel(panel, "SIMBRIEF", ref y);
+        var sbNote = new Label
+        {
+            Text = "Loads your latest SimBrief OFP: sets origin/dest, then tries to match the\n" +
+                   "filed SID, STAR and approach by name in the G1000's procedure lists.\n" +
+                   "Configure your SimBrief username in File → SimBrief Settings.",
+            Location = new Point(8, y), Size = new Size(560, 52)
+        };
+        panel.Controls.Add(sbNote);
+        y += 56;
+        var loadSbBtn = AddButton(panel, "Load from &SimBrief", ref y);
+        loadSbBtn.Click += async (_, _) => await LoadFromSimbriefAsync();
 
         y += 12;
         AddSectionLabel(panel, "FLIGHT PLAN", ref y);
@@ -545,6 +563,102 @@ public sealed class G1000NavigatorForm : Form
         string? result = await _client.EvaluatePromiseAsync(JsClearFpl, 8000);
         HandleSimpleResult(result, "Flight plan cleared", "Clear FPL failed");
         if (WasOk(result)) await RefreshAsync();
+    }
+
+    private async Task LoadFromSimbriefAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_simbriefUsername))
+        {
+            _announcer.AnnounceImmediate("No SimBrief username set — go to File, SimBrief Settings");
+            return;
+        }
+        if (!EnsureConnected()) return;
+
+        SetStatus("Fetching SimBrief OFP…");
+        _announcer.AnnounceImmediate("Fetching SimBrief flight plan, please wait");
+
+        Models.SimBriefOFP ofp;
+        try
+        {
+            var svc = new SimBriefService();
+            ofp = await svc.FetchFullOFPAsync(_simbriefUsername);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"SimBrief fetch failed: {ex.Message}");
+            _announcer.AnnounceImmediate($"SimBrief error: {ex.Message}");
+            return;
+        }
+
+        string orig = ofp.OriginIcao.Trim().ToUpperInvariant();
+        string dest = ofp.DestIcao.Trim().ToUpperInvariant();
+        string sid  = ofp.OriginSid.Trim().ToUpperInvariant();
+        string star = ofp.DestStar.Trim().ToUpperInvariant();
+        string appr = ofp.DestApproach.Trim().ToUpperInvariant();
+
+        _announcer.AnnounceImmediate(
+            $"SimBrief plan: {orig} to {dest}" +
+            (string.IsNullOrWhiteSpace(sid) ? "" : $", SID {sid}") +
+            (string.IsNullOrWhiteSpace(star) ? "" : $", STAR {star}") +
+            (string.IsNullOrWhiteSpace(appr) ? "" : $", approach {appr}"));
+
+        // 1. Load departure airport + set origin
+        InvokeUI(() => { _depAirportBox.Text = orig; _originBox.Text = orig; });
+        await SetAirportAsync("dep", orig, isOrigin: true);
+
+        // 2. Load arrival airport + set destination
+        InvokeUI(() => { _arrAirportBox.Text = dest; _destBox.Text = dest; });
+        await SetAirportAsync("arr", dest, isOrigin: false);
+
+        // 3. Load procedures for both airports
+        await LoadProceduresAsync("dep", orig, "departure");
+        await LoadProceduresAsync("arr", dest, "arrival");
+
+        // 4. Match and select SID by name
+        if (!string.IsNullOrWhiteSpace(sid))
+        {
+            int sidIdx = _departures.FindIndex(d => d.Name.Contains(sid, StringComparison.OrdinalIgnoreCase));
+            if (sidIdx >= 0)
+            {
+                InvokeUI(() => { _sidCombo.SelectedIndex = sidIdx; PopulateSidRunwaysAndTransitions(); });
+                await ActivateSidAsync();
+                _announcer.AnnounceImmediate($"SID {_departures[sidIdx].Name} selected");
+            }
+            else
+                _announcer.AnnounceImmediate($"SID {sid} not found in G1000 procedure list — select manually");
+        }
+
+        // 5. Match and select STAR by name
+        if (!string.IsNullOrWhiteSpace(star))
+        {
+            int starIdx = _arrivals.FindIndex(a => a.Name.Contains(star, StringComparison.OrdinalIgnoreCase));
+            if (starIdx >= 0)
+            {
+                InvokeUI(() => { _starCombo.SelectedIndex = starIdx; PopulateStarRunwaysAndTransitions(); });
+                await ActivateStarAsync();
+                _announcer.AnnounceImmediate($"STAR {_arrivals[starIdx].Name} selected");
+            }
+            else
+                _announcer.AnnounceImmediate($"STAR {star} not found in G1000 procedure list — select manually");
+        }
+
+        // 6. Match and arm approach by name
+        if (!string.IsNullOrWhiteSpace(appr))
+        {
+            int apprIdx = _approaches.FindIndex(a => a.Name.Contains(appr, StringComparison.OrdinalIgnoreCase));
+            if (apprIdx >= 0)
+            {
+                InvokeUI(() => { _apprCombo.SelectedIndex = apprIdx; PopulateApproachTransitions(); });
+                await ArmApproachAsync();
+                _announcer.AnnounceImmediate($"Approach {_approaches[apprIdx].Name} armed");
+            }
+            else
+                _announcer.AnnounceImmediate($"Approach {appr} not found — select manually");
+        }
+
+        await RefreshAsync();
+        SetStatus($"SimBrief plan loaded: {orig}→{dest}  •  F5 to refresh");
+        _announcer.AnnounceImmediate("SimBrief plan loaded into G1000. Check Flight Plan tab to confirm.");
     }
 
     // ─────────────────────────────────────────────────────────────────────
