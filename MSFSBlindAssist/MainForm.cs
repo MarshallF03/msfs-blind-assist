@@ -71,6 +71,10 @@ public partial class MainForm : Form
     private GsxService? _gsxService;
     private Forms.AccessGSXForm? _accessGsxForm;
 
+    // G1000 NXi Coherent GT debugger client (used when C172 G1000 is loaded)
+    private MSFSBlindAssist.SimConnect.CoherentGTClient? _g1000Client;
+    private Forms.GPS.G1000NavigatorForm? _g1000NavigatorForm;
+
     // Latest SIM_ON_GROUND sample. Cached unconditionally from the SIM_ON_GROUND
     // event so any feature that needs to know "on ground vs airborne" right now
     // can read it without making a fresh SimConnect request. Defaults to true
@@ -1714,6 +1718,9 @@ public partial class MainForm : Form
             case HotkeyAction.ReadGsxTooltip:
                 ReadLatestGsxTooltip();
                 break;
+            case HotkeyAction.ShowG1000Navigator:
+                ShowG1000NavigatorForm();
+                break;
             // Note: FCU push/pull, autopilot toggles, FCU set value dialogs, and A32NX-specific hotkeys
             // are now handled by the aircraft definition via HandleHotkeyAction()
         }
@@ -1753,6 +1760,30 @@ public partial class MainForm : Form
         _accessGsxForm.TopMost = false;
         _accessGsxForm.BringToFront();
         _accessGsxForm.Activate();
+    }
+
+    /// <summary>
+    /// Input Shift+G: open the G1000 Navigator form.
+    /// Creates a CoherentGTClient on first use (connects lazily when the form is shown).
+    /// Only meaningful when the C172 G1000 is loaded, but does no harm otherwise.
+    /// </summary>
+    private void ShowG1000NavigatorForm()
+    {
+        if (_g1000Client == null)
+            _g1000Client = new MSFSBlindAssist.SimConnect.CoherentGTClient();
+
+        if (_g1000NavigatorForm == null || _g1000NavigatorForm.IsDisposed)
+            _g1000NavigatorForm = new Forms.GPS.G1000NavigatorForm(_g1000Client, announcer);
+
+        if (!_g1000NavigatorForm.Visible)
+            _g1000NavigatorForm.Show();
+        _g1000NavigatorForm.TopMost = true;
+        _g1000NavigatorForm.TopMost = false;
+        _g1000NavigatorForm.BringToFront();
+        _g1000NavigatorForm.Activate();
+
+        // Kick off connect + refresh in the background so the form opens instantly
+        _ = _g1000NavigatorForm.ConnectAndRefreshAsync();
     }
 
     /// <summary>
@@ -3872,6 +3903,19 @@ public partial class MainForm : Form
             comancheHangarForm = null;
         }
 
+        // Disconnect G1000 client when switching away (reconnects lazily on next open)
+        if (_g1000NavigatorForm != null && !_g1000NavigatorForm.IsDisposed)
+        {
+            _g1000NavigatorForm.Dispose();
+            _g1000NavigatorForm = null;
+        }
+        _g1000Client?.Disconnect();
+        if (!(newAircraft is CessnaC172G1000Definition))
+        {
+            _g1000Client?.Dispose();
+            _g1000Client = null;
+        }
+
         if (hs787SimBriefForm != null && !hs787SimBriefForm.IsDisposed)
         {
             hs787SimBriefForm.Dispose();
@@ -5722,6 +5766,11 @@ public partial class MainForm : Form
         hs787EFBForm?.Dispose();
         hs787BridgeServer?.Dispose();
         hs787BridgeServer = null;
+
+        _g1000NavigatorForm?.Dispose();
+        _g1000NavigatorForm = null;
+        _g1000Client?.Dispose();
+        _g1000Client = null;
 
         // Clean up managers and resources
         hotkeyManager?.Cleanup();
