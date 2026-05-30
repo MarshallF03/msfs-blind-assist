@@ -277,29 +277,45 @@ public sealed class CoherentGTClient : IDisposable
     private static async Task<(string? wsUrl, string? title)> FindTargetAsync(
         int port, string filter, CancellationToken ct)
     {
-        try
-        {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
-            string json = await http.GetStringAsync($"http://127.0.0.1:{port}/json", ct);
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
 
-            using var doc = JsonDocument.Parse(json);
-            foreach (var target in doc.RootElement.EnumerateArray())
+        foreach (string path in TargetEndpoints)
+        {
+            try
             {
-                string url   = target.TryGetProperty("url",   out var u) ? u.GetString() ?? "" : "";
-                string title = target.TryGetProperty("title", out var t) ? t.GetString() ?? "" : "";
+                string body = await http.GetStringAsync($"http://127.0.0.1:{port}{path}", ct);
+                using var doc = JsonDocument.Parse(body);
 
-                bool matches = url.Contains(filter, StringComparison.OrdinalIgnoreCase)
-                            || title.Contains(filter, StringComparison.OrdinalIgnoreCase);
-                if (!matches) continue;
+                var root = doc.RootElement;
+                var arr  = root.ValueKind == JsonValueKind.Array ? root
+                         : root.TryGetProperty("targets", out var t) ? t
+                         : root.TryGetProperty("pages",   out var p) ? p
+                         : root;
+                if (arr.ValueKind != JsonValueKind.Array) continue;
 
-                if (target.TryGetProperty("webSocketDebuggerUrl", out var ws))
-                    return (ws.GetString(), title);
+                foreach (var target in arr.EnumerateArray())
+                {
+                    string url   = target.TryGetProperty("url",   out var u)  ? u.GetString()  ?? ""
+                                 : target.TryGetProperty("file",  out var uf) ? uf.GetString() ?? "" : "";
+                    string title = target.TryGetProperty("title", out var tt) ? tt.GetString() ?? ""
+                                 : target.TryGetProperty("name",  out var tn) ? tn.GetString() ?? "" : "";
+
+                    bool matches = url.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                                || title.Contains(filter, StringComparison.OrdinalIgnoreCase);
+                    if (!matches) continue;
+
+                    // Coherent GT may use "webSocketDebuggerUrl" or "wsUrl" or build from id
+                    if (target.TryGetProperty("webSocketDebuggerUrl", out var ws)) return (ws.GetString(), title);
+                    if (target.TryGetProperty("wsUrl",                out var wu)) return (wu.GetString(), title);
+                    if (target.TryGetProperty("id",                   out var id))
+                        return ($"ws://127.0.0.1:{port}/{id.GetString()}", title);
+                }
             }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"[CoherentGT] /json probe failed (port {port}): {ex.Message}");
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CoherentGT] {path} probe failed (port {port}): {ex.Message}");
+            }
         }
         return (null, null);
     }
@@ -308,32 +324,51 @@ public sealed class CoherentGTClient : IDisposable
     /// Returns all debuggable target titles/URLs on a given port, for diagnostics.
     /// Tries /json and /json/list endpoints.
     /// </summary>
+    // Coherent GT (MSFS) uses /pagelist.json — Chrome DevTools Protocol uses /json.
+    // Both are tried; whichever returns a JSON array of targets wins.
+    private static readonly string[] TargetEndpoints =
+        { "/pagelist.json", "/json", "/json/list" };
+
     public static async Task<List<(string title, string url)>> ListTargetsAsync(int port = 9999)
     {
         var results = new List<(string, string)>();
-        foreach (string path in new[] { "/json", "/json/list" })
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+
+        foreach (string path in TargetEndpoints)
         {
             try
             {
-                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
                 string body = await http.GetStringAsync($"http://127.0.0.1:{port}{path}");
-                using var doc = JsonDocument.Parse(body);
-                var root = doc.RootElement;
-                // Handle both array at root and {targets:[...]} wrapper
-                var arr = root.ValueKind == JsonValueKind.Array ? root
-                        : root.TryGetProperty("targets", out var t) ? t : root;
-                if (arr.ValueKind == JsonValueKind.Array)
-                    foreach (var item in arr.EnumerateArray())
-                    {
-                        string title = item.TryGetProperty("title", out var tt) ? tt.GetString() ?? "" : "";
-                        string url   = item.TryGetProperty("url",   out var uu) ? uu.GetString() ?? "" : "";
-                        results.Add((title, url));
-                    }
+                TryParseTargets(body, results);
                 if (results.Count > 0) return results;
             }
             catch { }
         }
         return results;
+    }
+
+    private static void TryParseTargets(string body, List<(string title, string url)> results)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            var arr = root.ValueKind == JsonValueKind.Array ? root
+                    : root.TryGetProperty("targets", out var t) ? t
+                    : root.TryGetProperty("pages",   out var p) ? p
+                    : root;
+            if (arr.ValueKind != JsonValueKind.Array) return;
+            foreach (var item in arr.EnumerateArray())
+            {
+                // Coherent GT uses "title"/"url"; some versions may use "name"/"file"
+                string title = item.TryGetProperty("title", out var tt) ? tt.GetString() ?? ""
+                             : item.TryGetProperty("name",  out var tn) ? tn.GetString() ?? "" : "";
+                string url   = item.TryGetProperty("url",   out var uu) ? uu.GetString() ?? ""
+                             : item.TryGetProperty("file",  out var uf) ? uf.GetString() ?? "" : "";
+                results.Add((title, url));
+            }
+        }
+        catch { }
     }
 
     /// <summary>
@@ -344,7 +379,7 @@ public sealed class CoherentGTClient : IDisposable
     {
         var sb = new StringBuilder();
         int[] ports = { 9999, 19999, 9222, 19998 };
-        string[] paths = { "/json", "/json/list", "/", "/devtools/browser" };
+        string[] paths = { "/pagelist.json", "/json", "/json/list", "/", "/devtools/browser" };
 
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
 
@@ -357,7 +392,7 @@ public sealed class CoherentGTClient : IDisposable
                 {
                     var resp = await http.GetAsync($"http://127.0.0.1:{port}{path}");
                     string body = await resp.Content.ReadAsStringAsync();
-                    string preview = body.Length > 200 ? body[..200] + "…" : body;
+                    string preview = body.Length > 800 ? body[..800] + "…" : body;
                     sb.AppendLine($"Port {port}{path}  →  HTTP {(int)resp.StatusCode}");
                     sb.AppendLine($"  Body: {preview.Replace('\n', ' ').Replace('\r', ' ')}");
                     anyHit = true;
