@@ -305,10 +305,24 @@ public sealed class CoherentGTClient : IDisposable
                     if (!matches) continue;
 
                     // Coherent GT may use "webSocketDebuggerUrl" or "wsUrl" or build from id
-                    if (target.TryGetProperty("webSocketDebuggerUrl", out var ws)) return (ws.GetString(), title);
-                    if (target.TryGetProperty("wsUrl",                out var wu)) return (wu.GetString(), title);
-                    if (target.TryGetProperty("id",                   out var id))
-                        return ($"ws://127.0.0.1:{port}/{id.GetString()}", title);
+                        // Chrome CDP style
+                    if (target.TryGetProperty("webSocketDebuggerUrl", out var ws) && ws.GetString() != null)
+                        return (ws.GetString(), title);
+                    if (target.TryGetProperty("wsUrl", out var wu) && wu.GetString() != null)
+                        return (wu.GetString(), title);
+
+                    // Coherent GT style: inspectorUrl = "/inspector/Main.html?page=3"
+                    // WebSocket is at ws://host:port/page/<id>
+                    if (target.TryGetProperty("inspectorUrl", out var iu))
+                    {
+                        var m = System.Text.RegularExpressions.Regex.Match(
+                            iu.GetString() ?? "", @"page=(\d+)");
+                        if (m.Success)
+                            return ($"ws://127.0.0.1:{port}/page/{m.Groups[1].Value}", title);
+                    }
+                    // Last resort: bare numeric id
+                    if (target.TryGetProperty("id", out var id))
+                        return ($"ws://127.0.0.1:{port}/page/{id.GetInt32()}", title);
                 }
             }
             catch (Exception ex)
@@ -392,7 +406,26 @@ public sealed class CoherentGTClient : IDisposable
                 {
                     var resp = await http.GetAsync($"http://127.0.0.1:{port}{path}");
                     string body = await resp.Content.ReadAsStringAsync();
-                    string preview = body.Length > 800 ? body[..800] + "…" : body;
+                    // For pagelist.json, show parsed titles so the log is readable
+                    string preview;
+                    if (path == "/pagelist.json" && body.TrimStart().StartsWith("["))
+                    {
+                        try
+                        {
+                            using var pd = JsonDocument.Parse(body);
+                            var lines = pd.RootElement.EnumerateArray()
+                                .Select(e => {
+                                    string t = e.TryGetProperty("title", out var tv) ? tv.GetString() ?? "" : "";
+                                    string u = e.TryGetProperty("url",   out var uv) ? uv.GetString() ?? "" : "";
+                                    int    i = e.TryGetProperty("id",    out var iv) ? iv.GetInt32() : 0;
+                                    return $"  [{i}] {(string.IsNullOrWhiteSpace(t) ? "(no title)" : t)} — {u}";
+                                });
+                            preview = string.Join("\n", lines);
+                        }
+                        catch { preview = body.Length > 2000 ? body[..2000] + "…" : body; }
+                    }
+                    else
+                        preview = body.Length > 400 ? body[..400] + "…" : body;
                     sb.AppendLine($"Port {port}{path}  →  HTTP {(int)resp.StatusCode}");
                     sb.AppendLine($"  Body: {preview.Replace('\n', ' ').Replace('\r', ' ')}");
                     anyHit = true;
