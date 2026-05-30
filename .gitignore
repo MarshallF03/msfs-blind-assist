@@ -130,4 +130,4 @@ nul
 !MSFSBlindAssist/Libraries/Tolk.dll
 !nvda_controllerClient/
 !nvda_controllerClient/x64/
-!nvda_controllerClient/x64/nvdaControllerClient.dll
+!nvda_controllerClient/x64/nvdaControllerClient.dll*.tmp.*
