@@ -157,7 +157,6 @@ public class HotkeyManager : IDisposable
         private const int HOTKEY_GROUND_TRAFFIC = 9207;     // Output mode: Alt+G (Nearest ground traffic)
         private const int HOTKEY_ACCESS_GSX = 9208;         // Input mode: Alt+G (Open Access GSX window)
         private const int HOTKEY_READ_GSX_TOOLTIP = 9209;   // Output mode: Ctrl+G (Read latest GSX tooltip)
-        private const int HOTKEY_G1000_NAVIGATOR = 9214;    // Input mode: Shift+G (Open G1000 Navigator)
 
         // Time-of-day hotkey IDs (Output mode). Local time = aircraft position
         // local time (sim handles tz mapping); Zulu = UTC. HH:MM by default,
@@ -579,9 +578,6 @@ public class HotkeyManager : IDisposable
                             break;
                         case HOTKEY_ACCESS_GSX:
                             TriggerHotkey(HotkeyAction.ShowAccessGSX);
-                            break;
-                        case HOTKEY_G1000_NAVIGATOR:
-                            TriggerHotkey(HotkeyAction.ShowG1000Navigator);
                             break;
                     }
                     DeactivateInputHotkeyMode();
@@ -1283,5 +1279,4 @@ public class HotkeyManager : IDisposable
         AnnounceGroundTraffic,
         ShowAccessGSX,
         ReadGsxTooltip,
-        ShowG1000Navigator,
     }
