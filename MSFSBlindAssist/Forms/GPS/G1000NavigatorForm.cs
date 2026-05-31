@@ -185,8 +185,9 @@ public sealed class G1000NavigatorForm : Form
             return;
         }
 
-        // Small delay for FMS to process the direct-to before we engage NAV
-        await Task.Delay(600);
+        // Give the G1000 FMS time to process the direct-to and stabilise
+        // before we try to engage NAV mode (too early = AP state in flux)
+        await Task.Delay(1200);
 
         // Engage GPS→NAV1 + NAV mode so the autopilot starts turning
         string followResult = await _fms.FollowGpsPlanAsync();
@@ -272,7 +273,7 @@ public sealed class G1000NavigatorForm : Form
         if (!ok) { _announcer.AnnounceImmediate($"Direct-to {ident} failed"); return; }
 
         InvokeUI(() => _directToBox.Clear());
-        await Task.Delay(600);
+        await Task.Delay(1200);
         string followResult = await _fms.FollowGpsPlanAsync();
         _announcer.AnnounceImmediate($"Direct to {ident}. {followResult}");
     }

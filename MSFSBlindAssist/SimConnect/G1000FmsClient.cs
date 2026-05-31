@@ -166,16 +166,24 @@ return JSON.stringify({
         if (hdg)
         {
             await _cgt.EvaluateAsync("SimVar.SetSimVarValue('K:AP_PANEL_HEADING_HOLD','number',0);'ok'", 2000);
-            await Task.Delay(300);
+            await Task.Delay(500);
             actions.Add("HDG mode OFF");
         }
 
-        // Step 3: Engage NAV mode if not already on
+        // Step 3: Engage NAV mode — retry up to 3 times with increasing delays
+        // Uses AP_PANEL_NAV1_HOLD (consistent with AP_PANEL_HEADING_HOLD for HDG)
         if (!nav)
         {
-            await _cgt.EvaluateAsync("SimVar.SetSimVarValue('K:AP_NAV1_HOLD','number',0);'ok'", 2000);
-            await Task.Delay(400);
-            actions.Add("NAV mode ON");
+            bool navEngaged = false;
+            for (int attempt = 0; attempt < 3 && !navEngaged; attempt++)
+            {
+                await _cgt.EvaluateAsync("SimVar.SetSimVarValue('K:AP_PANEL_NAV1_HOLD','number',0);'ok'", 2000);
+                await Task.Delay(500 + attempt * 300);
+                string? check = await _cgt.EvaluateAsync(
+                    "SimVar.GetSimVarValue('AUTOPILOT NAV1 LOCK','bool')>0?'1':'0'", 1500);
+                navEngaged = check == "1";
+            }
+            actions.Add(navEngaged ? "NAV mode ON" : "NAV mode (sent — check KAP140 panel)");
         }
 
         // Verify final state
@@ -192,10 +200,14 @@ return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1
 
         if (finalGps && finalNav)
             return actions.Count > 0
-                ? $"Following GPS plan. Changed: {string.Join(", ", actions)}"
-                : "Already following GPS plan (GPS→NAV1 ON, NAV mode ON)";
-        else
-            return $"Partial result — GPS drives NAV1: {(finalGps ? "ON" : "OFF")}, NAV mode: {(finalNav ? "ON" : "OFF")}. Try again.";
+                ? $"Following GPS plan. {string.Join(", ", actions)}."
+                : "Already following GPS plan.";
+
+        // Build helpful message about what's missing
+        var missing = new System.Collections.Generic.List<string>();
+        if (!finalGps) missing.Add("GPS→NAV1 still off — press GPS→NAV1 toggle button");
+        if (!finalNav) missing.Add("KAP140 NAV not engaged — press NAV button in the autopilot panel");
+        return string.Join(". ", missing) + ".";
     }
 
     /// <summary>
