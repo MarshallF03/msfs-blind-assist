@@ -55,7 +55,18 @@ _gps.postState = function(type, data) {
 
 // ── FMS discovery ─────────────────────────────────────────────────────────────
 _gps.findFms = function() {
-    // Walk registered instruments to find the G1000 MFD and its fms reference
+    // Primary path (confirmed 2026-05-31): FMS is on the <wtg1000-mfd> custom element
+    try {
+        var el = document.querySelector('wtg1000-mfd');
+        if (el && el.fms && typeof el.fms.getPrimaryFlightPlan === 'function') {
+            _gps.fms = el.fms;
+            _gps.instrument = el;
+            _gps.fmsFound = true;
+            return true;
+        }
+    } catch(e) {}
+
+    // Fallback: walk window for any object with fms.getPrimaryFlightPlan
     try {
         var keys = Object.keys(window);
         for (var i = 0; i < keys.length; i++) {
@@ -67,12 +78,8 @@ _gps.findFms = function() {
                 return true;
             }
         }
-        // Fallback: try the g1000nximfd module's exported fms
-        if (typeof g1000nximfd !== 'undefined') {
-            var inst = document.querySelector('vcockpit-instrument');
-            if (inst && inst.fms) { _gps.fms = inst.fms; _gps.fmsFound = true; return true; }
-        }
     } catch(e) {}
+
     return false;
 };
 
