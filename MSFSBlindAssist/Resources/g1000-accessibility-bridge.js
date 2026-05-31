@@ -19,8 +19,22 @@ if (window._g1000_bridge_v3) {
 } else {
 window._g1000_bridge_v3 = true;
 
-var _gps = window._gps || {};
-window._gps = _gps;
+// Kill any old bridge timers before overwriting _gps
+// This ensures v3 always wins even if v2 ran first in the same session
+if (window._gps) {
+    var _old = window._gps;
+    try { if (_old._heartbeatTimer)  clearInterval(_old._heartbeatTimer);  } catch(e) {}
+    try { if (_old._statePollTimer)  clearInterval(_old._statePollTimer);  } catch(e) {}
+    try { if (_old._cmdPollTimer)    clearInterval(_old._cmdPollTimer);    } catch(e) {}
+    try { if (_old.heartbeatTimer)   clearInterval(_old.heartbeatTimer);   } catch(e) {}
+    try { if (_old.stateUpdateTimer) clearInterval(_old.stateUpdateTimer); } catch(e) {}
+    try { if (_old.commandPollTimer) clearInterval(_old.commandPollTimer); } catch(e) {}
+    console.log('[G1000 Bridge v3] killed old bridge (was v' + (_old.VERSION || '?') + ')');
+}
+
+// Always start completely fresh
+window._gps = {};
+var _gps = window._gps;
 
 _gps.VERSION      = '3.0.0';
 _gps.SERVER_URL   = 'http://localhost:19778';
