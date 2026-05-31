@@ -405,6 +405,10 @@ public abstract class CessnaC172BaseDefinition : BaseAircraftDefinition
             },
 
             // ===== AUTOPILOT (KAP140) =====
+            // RenderAsButton + Continuous + IsAnnounced: each mode is a self-updating
+            // toggle button. Pressing it sends the K: event and the button label
+            // updates automatically from the live SimVar. Announces "ON" / "OFF"
+            // without any user action other than pressing the button.
 
             ["C172_AP_MASTER_STATE"] = new SimConnect.SimVarDefinition
             {
@@ -412,79 +416,54 @@ public abstract class CessnaC172BaseDefinition : BaseAircraftDefinition
                 DisplayName = "Autopilot",
                 Type = SimConnect.SimVarType.SimVar,
                 Units = "Bool",
-                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest,
-                ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "Engaged" }
-            },
-            ["C172_AP_MASTER_TOGGLE"] = new SimConnect.SimVarDefinition
-            {
-                Name = "AP_MASTER",
-                DisplayName = "Autopilot Toggle",
-                Type = SimConnect.SimVarType.Event,
-                UpdateFrequency = SimConnect.UpdateFrequency.Never
+                UpdateFrequency = SimConnect.UpdateFrequency.Continuous,
+                IsAnnounced = true,
+                RenderAsButton = true,
+                ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "ON" }
             },
             ["C172_AP_HDG_STATE"] = new SimConnect.SimVarDefinition
             {
                 Name = "AUTOPILOT HEADING LOCK",
-                DisplayName = "Heading Hold",
+                DisplayName = "HDG Hold",
                 Type = SimConnect.SimVarType.SimVar,
                 Units = "Bool",
-                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest,
-                ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "Engaged" }
-            },
-            ["C172_AP_HDG_TOGGLE"] = new SimConnect.SimVarDefinition
-            {
-                Name = "AP_HDG_HOLD",
-                DisplayName = "Heading Hold Toggle",
-                Type = SimConnect.SimVarType.Event,
-                UpdateFrequency = SimConnect.UpdateFrequency.Never
+                UpdateFrequency = SimConnect.UpdateFrequency.Continuous,
+                IsAnnounced = true,
+                RenderAsButton = true,
+                ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "ON" }
             },
             ["C172_AP_ALT_STATE"] = new SimConnect.SimVarDefinition
             {
                 Name = "AUTOPILOT ALTITUDE LOCK",
-                DisplayName = "Altitude Hold",
+                DisplayName = "ALT Hold",
                 Type = SimConnect.SimVarType.SimVar,
                 Units = "Bool",
-                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest,
-                ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "Engaged" }
-            },
-            ["C172_AP_ALT_TOGGLE"] = new SimConnect.SimVarDefinition
-            {
-                Name = "AP_ALT_HOLD",
-                DisplayName = "Altitude Hold Toggle",
-                Type = SimConnect.SimVarType.Event,
-                UpdateFrequency = SimConnect.UpdateFrequency.Never
+                UpdateFrequency = SimConnect.UpdateFrequency.Continuous,
+                IsAnnounced = true,
+                RenderAsButton = true,
+                ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "ON" }
             },
             ["C172_AP_NAV_STATE"] = new SimConnect.SimVarDefinition
             {
                 Name = "AUTOPILOT NAV1 LOCK",
-                DisplayName = "NAV Hold",
+                DisplayName = "NAV Mode",
                 Type = SimConnect.SimVarType.SimVar,
                 Units = "Bool",
-                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest,
-                ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "Engaged" }
-            },
-            ["C172_AP_NAV_TOGGLE"] = new SimConnect.SimVarDefinition
-            {
-                Name = "AP_NAV1_HOLD",
-                DisplayName = "NAV Hold Toggle",
-                Type = SimConnect.SimVarType.Event,
-                UpdateFrequency = SimConnect.UpdateFrequency.Never
+                UpdateFrequency = SimConnect.UpdateFrequency.Continuous,
+                IsAnnounced = true,
+                RenderAsButton = true,
+                ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "ON" }
             },
             ["C172_AP_APR_STATE"] = new SimConnect.SimVarDefinition
             {
                 Name = "AUTOPILOT APPROACH HOLD",
-                DisplayName = "Approach Mode",
+                DisplayName = "APR Mode",
                 Type = SimConnect.SimVarType.SimVar,
                 Units = "Bool",
-                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest,
-                ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "Engaged" }
-            },
-            ["C172_AP_APR_TOGGLE"] = new SimConnect.SimVarDefinition
-            {
-                Name = "AP_APR_HOLD",
-                DisplayName = "Approach Mode Toggle",
-                Type = SimConnect.SimVarType.Event,
-                UpdateFrequency = SimConnect.UpdateFrequency.Never
+                UpdateFrequency = SimConnect.UpdateFrequency.Continuous,
+                IsAnnounced = true,
+                RenderAsButton = true,
+                ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "ON" }
             },
             ["C172_AP_BC_STATE"] = new SimConnect.SimVarDefinition
             {
@@ -492,31 +471,21 @@ public abstract class CessnaC172BaseDefinition : BaseAircraftDefinition
                 DisplayName = "Back Course",
                 Type = SimConnect.SimVarType.SimVar,
                 Units = "Bool",
-                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest,
-                ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "Engaged" }
-            },
-            ["C172_AP_BC_TOGGLE"] = new SimConnect.SimVarDefinition
-            {
-                Name = "AP_BC_HOLD",
-                DisplayName = "Back Course Toggle",
-                Type = SimConnect.SimVarType.Event,
-                UpdateFrequency = SimConnect.UpdateFrequency.Never
+                UpdateFrequency = SimConnect.UpdateFrequency.Continuous,
+                IsAnnounced = true,
+                RenderAsButton = true,
+                ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "ON" }
             },
             ["C172_AP_VS_STATE"] = new SimConnect.SimVarDefinition
             {
                 Name = "AUTOPILOT VERTICAL HOLD",
-                DisplayName = "Vertical Speed Mode",
+                DisplayName = "VS Mode",
                 Type = SimConnect.SimVarType.SimVar,
                 Units = "Bool",
-                UpdateFrequency = SimConnect.UpdateFrequency.OnRequest,
-                ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "Engaged" }
-            },
-            ["C172_AP_VS_TOGGLE"] = new SimConnect.SimVarDefinition
-            {
-                Name = "AP_VS_HOLD",
-                DisplayName = "Vertical Speed Mode Toggle",
-                Type = SimConnect.SimVarType.Event,
-                UpdateFrequency = SimConnect.UpdateFrequency.Never
+                UpdateFrequency = SimConnect.UpdateFrequency.Continuous,
+                IsAnnounced = true,
+                RenderAsButton = true,
+                ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "ON" }
             },
 
             // AP value readouts
@@ -892,13 +861,18 @@ public abstract class CessnaC172BaseDefinition : BaseAircraftDefinition
             },
             ["KAP140"] = new List<string>
             {
-                "C172_AP_MASTER_STATE",
-                "C172_AP_HDG_STATE",
-                "C172_AP_ALT_STATE",
-                "C172_AP_NAV_STATE",
-                "C172_AP_APR_STATE",
-                "C172_AP_BC_STATE",
-                "C172_AP_VS_STATE"
+                // Toggle buttons — press to engage/disengage, announces state change automatically
+                "C172_AP_MASTER_STATE",   // Autopilot master
+                "C172_AP_HDG_STATE",      // HDG mode
+                "C172_AP_ALT_STATE",      // ALT hold
+                "C172_AP_NAV_STATE",      // NAV mode (follows GPS when GPS drives NAV1)
+                "C172_AP_APR_STATE",      // Approach mode
+                "C172_AP_BC_STATE",       // Back course
+                "C172_AP_VS_STATE",       // Vertical speed mode
+                // Readouts below
+                "C172_AP_HDG_VALUE",
+                "C172_AP_ALT_VALUE",
+                "C172_AP_VS_VALUE"
             },
             ["COM"] = new List<string>
             {
