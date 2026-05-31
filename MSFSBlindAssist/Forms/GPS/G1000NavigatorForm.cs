@@ -314,8 +314,25 @@ public sealed class G1000NavigatorForm : Form
         _navBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true,
             ScrollBars = ScrollBars.Vertical, AccessibleName = "Active nav info", Text = "Waiting for data…" };
 
-        _gpsNavBtn = new Button { Dock = DockStyle.Top, Height = 34,
-            Text = "GPS → NAV1: OFF  (click ON  ← needed for autopilot to follow)",
+        // BIG button — the main IFR action
+        var followBtn = new Button
+        {
+            Dock = DockStyle.Top, Height = 40,
+            Text = "FOLLOW GPS PLAN  (GPS→NAV1 + KAP140 NAV mode)",
+            AccessibleName = "Follow GPS flight plan",
+            AccessibleDescription = "Enables GPS drives NAV1 and engages KAP140 NAV mode so autopilot follows the active FPL leg. Smart — reads state first.",
+            BackColor = System.Drawing.Color.DarkBlue, ForeColor = System.Drawing.Color.White,
+            Font = new System.Drawing.Font(System.Drawing.SystemFonts.DefaultFont, System.Drawing.FontStyle.Bold)
+        };
+        followBtn.Click += async (_, _) =>
+        {
+            string result = await _fms.FollowGpsPlanAsync();
+            _announcer.AnnounceImmediate(result);
+        };
+
+        // Secondary toggle for GPS drives NAV1 alone
+        _gpsNavBtn = new Button { Dock = DockStyle.Top, Height = 28,
+            Text = "GPS → NAV1: OFF  (toggle only)",
             AccessibleName = "Toggle GPS drives NAV 1",
             BackColor = System.Drawing.Color.DarkRed, ForeColor = System.Drawing.Color.White };
         _gpsNavBtn.Click += async (_, _) =>
@@ -324,14 +341,12 @@ public sealed class G1000NavigatorForm : Form
             _announcer.AnnounceImmediate($"GPS drives NAV 1: {(newState ? "ON" : "OFF")}");
         };
 
-        var refreshBtn = new Button { Dock = DockStyle.Top, Height = 28, Text = "&Reconnect / Refresh (F5)" };
-        refreshBtn.Click += (_, _) =>
-        {
-            if (!_fms.IsConnected) _ = ConnectAndRefreshAsync();
-        };
+        var refreshBtn = new Button { Dock = DockStyle.Top, Height = 26, Text = "&Reconnect / Refresh (F5)" };
+        refreshBtn.Click += (_, _) => { if (!_fms.IsConnected) _ = ConnectAndRefreshAsync(); };
 
         page.Controls.Add(_navBox);
         page.Controls.Add(_gpsNavBtn);
+        page.Controls.Add(followBtn);
         page.Controls.Add(refreshBtn);
         return page;
     }

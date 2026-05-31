@@ -120,6 +120,85 @@ public sealed class G1000FmsClient : IDisposable
     }
 
     /// <summary>
+    /// One-button "Follow GPS flight plan" — the key IFR action.
+    /// Ensures GPS drives NAV1, turns off HDG mode, engages NAV mode.
+    /// Smart: reads current state first, only changes what needs changing.
+    /// Returns a status string for announcement.
+    /// </summary>
+    public async Task<string> FollowGpsPlanAsync()
+    {
+        // Read current state
+        const string readJs = @"(function(){var sv=SimVar.GetSimVarValue;
+return JSON.stringify({
+  gps: sv('GPS DRIVES NAV1','bool')>0,
+  nav: sv('AUTOPILOT NAV1 LOCK','bool')>0,
+  hdg: sv('AUTOPILOT HEADING LOCK','bool')>0,
+  ap:  sv('AUTOPILOT MASTER','bool')>0
+});})()";
+        string? stateJson = await _cgt.EvaluateAsync(readJs, 3000);
+        if (stateJson == null) return "Could not read autopilot state";
+
+        bool gps, nav, hdg, ap;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(stateJson);
+            var r = doc.RootElement;
+            gps = r.TryGetProperty("gps", out var g) && g.GetBoolean();
+            nav = r.TryGetProperty("nav", out var n) && n.GetBoolean();
+            hdg = r.TryGetProperty("hdg", out var h) && h.GetBoolean();
+            ap  = r.TryGetProperty("ap",  out var a) && a.GetBoolean();
+        }
+        catch { return "Could not parse autopilot state"; }
+
+        if (!ap) return "Autopilot master is OFF — engage it first (AP button on KAP140 panel)";
+
+        var actions = new System.Collections.Generic.List<string>();
+
+        // Step 1: GPS drives NAV1 must be ON — toggle only if currently off
+        if (!gps)
+        {
+            await _cgt.EvaluateAsync("SimVar.SetSimVarValue('K:TOGGLE_GPS_DRIVES_NAV1','number',0);'ok'", 2000);
+            await Task.Delay(300);
+            actions.Add("GPS → NAV1 ON");
+        }
+
+        // Step 2: Turn off HDG mode if on (KAP140 won't enter NAV while HDG is active)
+        if (hdg)
+        {
+            await _cgt.EvaluateAsync("SimVar.SetSimVarValue('K:AP_PANEL_HEADING_HOLD','number',0);'ok'", 2000);
+            await Task.Delay(300);
+            actions.Add("HDG mode OFF");
+        }
+
+        // Step 3: Engage NAV mode if not already on
+        if (!nav)
+        {
+            await _cgt.EvaluateAsync("SimVar.SetSimVarValue('K:AP_NAV1_HOLD','number',0);'ok'", 2000);
+            await Task.Delay(400);
+            actions.Add("NAV mode ON");
+        }
+
+        // Verify final state
+        string? finalJson = await _cgt.EvaluateAsync(@"(function(){var sv=SimVar.GetSimVarValue;
+return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1 LOCK','bool')>0});})()");
+        bool finalGps = false, finalNav = false;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(finalJson ?? "{}");
+            finalGps = doc.RootElement.TryGetProperty("gps", out var fg) && fg.GetBoolean();
+            finalNav = doc.RootElement.TryGetProperty("nav", out var fn) && fn.GetBoolean();
+        }
+        catch { }
+
+        if (finalGps && finalNav)
+            return actions.Count > 0
+                ? $"Following GPS plan. Changed: {string.Join(", ", actions)}"
+                : "Already following GPS plan (GPS→NAV1 ON, NAV mode ON)";
+        else
+            return $"Partial result — GPS drives NAV1: {(finalGps ? "ON" : "OFF")}, NAV mode: {(finalNav ? "ON" : "OFF")}. Try again.";
+    }
+
+    /// <summary>
     /// Load an airport's procedures (SIDs/STARs/approaches) from the FMS.
     /// Returns null if the airport wasn't found or on timeout.
     /// The facility object is cached in the G1000 page under window._msfsba_fac_dep
