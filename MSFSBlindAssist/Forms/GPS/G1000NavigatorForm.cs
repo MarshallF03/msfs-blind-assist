@@ -29,6 +29,8 @@ public sealed class G1000NavigatorForm : Form
 
     // Tab 1 — Active nav
     private TextBox  _navBox        = null!;
+    private Button   _gpsNavBtn     = null!;   // GPS → NAV1 toggle
+    private bool     _gpsDrivesNav  = false;
 
     // Tab 2 — Flight plan
     private ListBox  _fplList       = null!;
@@ -75,8 +77,24 @@ public sealed class G1000NavigatorForm : Form
     private void OnBridgeConnected(object? sender, EventArgs e)
     {
         SetStatus("G1000 bridge connected — receiving live data");
-        _announcer.AnnounceImmediate("G1000 navigator connected");
+        _announcer.AnnounceImmediate("G1000 navigator connected. Flight plan loading.");
         _bridge.SendCommand("request_state");
+    }
+
+    /// <summary>Called from MainForm when the form is shown — ensures the bridge
+    /// server is running and announces current connection state.</summary>
+    public void EnsureVisible()
+    {
+        if (!_bridge.IsRunning)
+        {
+            _bridge.Start();
+            SetStatus("Bridge server starting on port 19778…");
+        }
+        else if (_lastFpl == null)
+        {
+            // Connected but no state yet — request it
+            _bridge.SendCommand("request_state");
+        }
     }
 
     private void OnFplState(object? sender, G1000FplStateArgs args)
@@ -122,8 +140,22 @@ public sealed class G1000NavigatorForm : Form
     private void OnNavState(object? sender, G1000NavStateArgs args)
     {
         _lastNav = args;
+        bool gpsChanged = _gpsDrivesNav != args.GpsDrivesNav;
+        _gpsDrivesNav = args.GpsDrivesNav;
+        if (gpsChanged)
+            _announcer.AnnounceImmediate(args.GpsDrivesNav ? "GPS drives NAV 1: ON" : "GPS drives NAV 1: OFF");
+
         InvokeUI(() =>
         {
+            // Update GPS→NAV1 button label so it reads current state
+            _gpsNavBtn.Text = args.GpsDrivesNav
+                ? "GPS → NAV1: ON  (click to turn OFF)"
+                : "GPS → NAV1: OFF  (click to turn ON)";
+            _gpsNavBtn.BackColor = args.GpsDrivesNav
+                ? System.Drawing.Color.DarkGreen
+                : System.Drawing.Color.DarkRed;
+            _gpsNavBtn.ForeColor = System.Drawing.Color.White;
+
             var active = _lastFpl?.Items.FirstOrDefault(l => l.IsActive);
             string ident = active?.Ident ?? "---";
 
@@ -201,15 +233,36 @@ public sealed class G1000NavigatorForm : Form
     private TabPage BuildNavTab()
     {
         var page = new TabPage("Nav (active)") { AccessibleName = "Active navigation tab" };
+
         _navBox = new TextBox
         {
             Dock = DockStyle.Fill, Multiline = true, ReadOnly = true,
             ScrollBars = ScrollBars.Vertical, AccessibleName = "Active waypoint navigation info",
             Text = "Waiting for data…"
         };
+
+        // GPS → NAV1 toggle — most important button, shown at the top
+        _gpsNavBtn = new Button
+        {
+            Dock = DockStyle.Top, Height = 34,
+            Text = "GPS → NAV1: OFF  (click to turn ON)",
+            AccessibleName = "Toggle GPS drives NAV 1",
+            AccessibleDescription = "When ON the autopilot follows the GPS flight plan. Must be ON for activate leg to cause a turn.",
+            BackColor = System.Drawing.Color.DarkRed,
+            ForeColor = System.Drawing.Color.White
+        };
+        _gpsNavBtn.Click += (_, _) =>
+        {
+            _bridge.SendCommand("gps_drives_nav");
+            _announcer.AnnounceImmediate("Toggling GPS drives NAV 1");
+        };
+
         var refreshBtn = new Button { Dock = DockStyle.Top, Height = 28, Text = "&Refresh (F5)" };
         refreshBtn.Click += (_, _) => _bridge.SendCommand("request_state");
+
+        // Add bottom-up (last added = topmost with DockStyle.Top)
         page.Controls.Add(_navBox);
+        page.Controls.Add(_gpsNavBtn);
         page.Controls.Add(refreshBtn);
         return page;
     }
@@ -356,7 +409,14 @@ public sealed class G1000NavigatorForm : Form
         if (i < 0 || _lastFpl == null || i >= _lastFpl.Items.Count) return;
         var leg = _lastFpl.Items[i];
         _bridge.SendCommand("activate_leg", new { index = leg.Index });
-        _announcer.AnnounceImmediate($"Going direct to {leg.Ident}");
+
+        // Tell the user what happened and whether the autopilot will actually follow
+        string msg = $"Direct to {leg.Ident} activated in FMS.";
+        if (!_gpsDrivesNav)
+            msg += " Warning: GPS is NOT driving NAV 1 — enable it on the Nav tab so the autopilot follows.";
+        else if (_lastNav?.GpsDrivesNav == true)
+            msg += " GPS drives NAV 1 is ON — autopilot will follow if NAV mode is engaged.";
+        _announcer.AnnounceImmediate(msg);
         e.Handled = e.SuppressKeyPress = true;
     }
 

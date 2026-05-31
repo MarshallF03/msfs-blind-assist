@@ -332,7 +332,12 @@ _gps.handleCommand = function(command, payload) {
 
         case 'gps_drives_nav':
             SimVar.SetSimVarValue('K:TOGGLE_GPS_DRIVES_NAV1', 'number', 0);
-            _gps.postState('command_ack', { command: command });
+            // Brief delay then report the new state so the form can update
+            setTimeout(function() {
+                var isOn = SimVar.GetSimVarValue('GPS DRIVES NAV1', 'bool') > 0;
+                _gps.postState('command_ack', { command: command, gpsDrivesNav: isOn });
+                _gps.sendNavState();
+            }, 200);
             break;
 
         case 'request_state':
@@ -386,15 +391,21 @@ _gps.tryConnect = function() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 _gps.init = function() {
-    // Try to find FMS now; retry up to 30 seconds
+    // Always start the heartbeat immediately so reconnection works even if
+    // FMS discovery takes time or the bridge was hot-injected manually.
+    if (!_gps._heartbeatTimer) {
+        _gps._heartbeatTimer = setInterval(_gps.tryConnect, 3000); // 3s for faster reconnect
+    }
+    _gps.tryConnect(); // try immediately
+
+    // Try to find FMS; retry up to 30 seconds
+    if (_gps.fmsFound) return; // already wired (e.g. hot-injection)
     var attempts = 0;
     var findTimer = setInterval(function() {
         attempts++;
         if (_gps.findFms()) {
             clearInterval(findTimer);
             console.log('[G1000 Bridge v3] FMS found after ' + attempts + ' attempts');
-            _gps._heartbeatTimer = setInterval(_gps.tryConnect, 5000);
-            _gps.tryConnect();
         } else if (attempts >= 60) {
             clearInterval(findTimer);
             console.log('[G1000 Bridge v3] FMS not found after 30s');

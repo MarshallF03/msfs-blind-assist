@@ -1795,6 +1795,7 @@ public partial class MainForm : Form
         _g1000NavigatorForm.TopMost = false;
         _g1000NavigatorForm.BringToFront();
         _g1000NavigatorForm.Activate();
+        _g1000NavigatorForm.EnsureVisible();
     }
 
     private void OnOutputHotkeyModeChanged(object? sender, HotkeyModeEventArgs e)
