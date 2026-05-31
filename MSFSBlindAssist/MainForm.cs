@@ -69,7 +69,7 @@ public partial class MainForm : Form
     // hidden (not closed) on dismiss so the service can keep speaking
     // tooltip updates in the background when configured.
     private GsxService? _gsxService;
-    private MSFSBlindAssist.SimConnect.G1000BridgeServer? _g1000Bridge;
+    private MSFSBlindAssist.SimConnect.G1000FmsClient? _g1000Client;
     private Forms.GPS.G1000NavigatorForm? _g1000NavigatorForm;
     private Forms.AccessGSXForm? _accessGsxForm;
 
@@ -1778,16 +1778,12 @@ public partial class MainForm : Form
 
     private void ShowG1000NavigatorForm()
     {
-        // Start bridge server lazily on first open
-        if (_g1000Bridge == null)
-        {
-            _g1000Bridge = new MSFSBlindAssist.SimConnect.G1000BridgeServer();
-            _g1000Bridge.Start();
-        }
+        if (_g1000Client == null)
+            _g1000Client = new MSFSBlindAssist.SimConnect.G1000FmsClient();
 
         if (_g1000NavigatorForm == null || _g1000NavigatorForm.IsDisposed)
             _g1000NavigatorForm = new Forms.GPS.G1000NavigatorForm(
-                _g1000Bridge, announcer,
+                _g1000Client, announcer,
                 MSFSBlindAssist.Settings.SettingsManager.Current.SimbriefUsername ?? "");
 
         if (!_g1000NavigatorForm.Visible) _g1000NavigatorForm.Show();
@@ -3956,20 +3952,12 @@ public partial class MainForm : Form
             StopHS787BridgeServer();
         }
 
-        // G1000 bridge: install/update mod package when C172 G1000 is selected
-        if (newAircraft.AircraftCode == "C172_G1000")
+        // G1000 client: disconnect when switching away, reconnects on next open
+        if (newAircraft.AircraftCode != "C172_G1000")
         {
-            var (ok, needsRestart, msg) = Patching.G1000ModPackageManager.InstallOrUpdate();
-            if (ok && needsRestart)
-                announcer.AnnounceImmediate(msg);
-            // Bridge server starts lazily when user opens the navigator (Shift+M)
-        }
-        else
-        {
-            // Close navigator form when switching away; keep bridge server running
-            // in case user switches back — it will reconnect automatically
+            _g1000Client?.Disconnect();
             if (_g1000NavigatorForm != null && !_g1000NavigatorForm.IsDisposed)
-            { _g1000NavigatorForm.Hide(); }
+                _g1000NavigatorForm.Hide();
         }
 
 
@@ -5761,7 +5749,7 @@ public partial class MainForm : Form
         hs787EFBForm?.Dispose();
         hs787BridgeServer?.Dispose();
         _g1000NavigatorForm?.Dispose();
-        _g1000Bridge?.Dispose();
+        _g1000Client?.Dispose();
         hs787BridgeServer = null;
 
 
