@@ -69,6 +69,8 @@ public partial class MainForm : Form
     // hidden (not closed) on dismiss so the service can keep speaking
     // tooltip updates in the background when configured.
     private GsxService? _gsxService;
+    private MSFSBlindAssist.SimConnect.G1000BridgeServer? _g1000Bridge;
+    private Forms.GPS.G1000NavigatorForm? _g1000NavigatorForm;
     private Forms.AccessGSXForm? _accessGsxForm;
 
 
@@ -1607,17 +1609,13 @@ public partial class MainForm : Form
                 break;
             case HotkeyAction.ShowFenixMCDU:
                 if (currentAircraft is IPMDGAircraft && simConnectManager.PMDGDataManager != null)
-                {
                     ShowPMDGCDUDialog();
-                }
                 else if (currentAircraft?.AircraftCode == "HS_787")
-                {
                     ShowHS787FMCDialog();
-                }
+                else if (currentAircraft?.AircraftCode == "C172_G1000")
+                    ShowG1000NavigatorForm();
                 else
-                {
                     ShowFenixMCDUDialog();
-                }
                 break;
             case HotkeyAction.ShowPMDGEFB:
                 if (currentAircraft is IPMDGAircraft pmdgEFB && pmdgEFB.HasEFBSupport)
@@ -1776,6 +1774,27 @@ public partial class MainForm : Form
             return;
         }
         announcer.AnnounceImmediate(tooltip);
+    }
+
+    private void ShowG1000NavigatorForm()
+    {
+        // Start bridge server lazily on first open
+        if (_g1000Bridge == null)
+        {
+            _g1000Bridge = new MSFSBlindAssist.SimConnect.G1000BridgeServer();
+            _g1000Bridge.Start();
+        }
+
+        if (_g1000NavigatorForm == null || _g1000NavigatorForm.IsDisposed)
+            _g1000NavigatorForm = new Forms.GPS.G1000NavigatorForm(
+                _g1000Bridge, announcer,
+                MSFSBlindAssist.Settings.SettingsManager.Current.SimbriefUsername ?? "");
+
+        if (!_g1000NavigatorForm.Visible) _g1000NavigatorForm.Show();
+        _g1000NavigatorForm.TopMost = true;
+        _g1000NavigatorForm.TopMost = false;
+        _g1000NavigatorForm.BringToFront();
+        _g1000NavigatorForm.Activate();
     }
 
     private void OnOutputHotkeyModeChanged(object? sender, HotkeyModeEventArgs e)
@@ -3936,6 +3955,22 @@ public partial class MainForm : Form
             StopHS787BridgeServer();
         }
 
+        // G1000 bridge: install/update mod package when C172 G1000 is selected
+        if (newAircraft.AircraftCode == "C172_G1000")
+        {
+            var (ok, needsRestart, msg) = Patching.G1000ModPackageManager.InstallOrUpdate();
+            if (ok && needsRestart)
+                announcer.AnnounceImmediate(msg);
+            // Bridge server starts lazily when user opens the navigator (Shift+M)
+        }
+        else
+        {
+            // Close navigator form when switching away; keep bridge server running
+            // in case user switches back — it will reconnect automatically
+            if (_g1000NavigatorForm != null && !_g1000NavigatorForm.IsDisposed)
+            { _g1000NavigatorForm.Hide(); }
+        }
+
 
         // Rebuild sections from new aircraft structure
         foreach (var section in currentAircraft.GetPanelStructure().Keys)
@@ -5724,6 +5759,8 @@ public partial class MainForm : Form
         hs787SimBriefForm?.Dispose();
         hs787EFBForm?.Dispose();
         hs787BridgeServer?.Dispose();
+        _g1000NavigatorForm?.Dispose();
+        _g1000Bridge?.Dispose();
         hs787BridgeServer = null;
 
 
