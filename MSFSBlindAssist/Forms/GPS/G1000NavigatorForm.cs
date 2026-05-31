@@ -163,21 +163,34 @@ public sealed class G1000NavigatorForm : Form
         int i = _fplList.SelectedIndex;
         if (i < 0 || _lastFpl == null || i >= _lastFpl.Legs.Count) return;
         var leg = _lastFpl.Legs[i];
-        _ = ActivateLegAsync(leg);
+        _ = DirectToAndFollowAsync(leg);
         e.Handled = e.SuppressKeyPress = true;
     }
 
-    private async Task ActivateLegAsync(G1000FplLeg leg)
+    /// <summary>
+    /// The main "go there" action — works for any waypoint in the FPL, including ones
+    /// before the current active leg (turn around / go back). Uses createDirectToRandom
+    /// which works in any direction, then immediately engages GPS→NAV1 + NAV mode so
+    /// the autopilot starts turning straight away. One keypress does everything.
+    /// </summary>
+    private async Task DirectToAndFollowAsync(G1000FplLeg leg)
     {
-        bool ok = await _fms.ActivateLegAsync(leg.Index);
-        string msg = ok
-            ? $"Direct to {leg.Ident} activated."
-            : $"Failed to activate {leg.Ident}.";
-        if (ok && !_gpsDrivesNav)
-            msg += " GPS is NOT driving NAV1 — toggle it on the Nav tab.";
-        else if (ok)
-            msg += " GPS drives NAV1 is ON — engage KAP140 NAV mode to follow.";
-        _announcer.AnnounceImmediate(msg);
+        _announcer.AnnounceImmediate($"Going direct to {leg.Ident}…");
+
+        // createDirectToRandom works backwards and forwards, unlike activateLeg
+        bool ok = await _fms.DirectToAsync(leg.Ident);
+        if (!ok)
+        {
+            _announcer.AnnounceImmediate($"Direct-to {leg.Ident} failed. Try the Direct-To tab instead.");
+            return;
+        }
+
+        // Small delay for FMS to process the direct-to before we engage NAV
+        await Task.Delay(600);
+
+        // Engage GPS→NAV1 + NAV mode so the autopilot starts turning
+        string followResult = await _fms.FollowGpsPlanAsync();
+        _announcer.AnnounceImmediate($"Direct to {leg.Ident}. {followResult}");
     }
 
     // ── Procedures ────────────────────────────────────────────────────────────
@@ -253,9 +266,15 @@ public sealed class G1000NavigatorForm : Form
     {
         string ident = _directToBox.Text.Trim().ToUpperInvariant();
         if (string.IsNullOrWhiteSpace(ident)) { _announcer.AnnounceImmediate("Enter a waypoint ICAO"); return; }
+
+        _announcer.AnnounceImmediate($"Going direct to {ident}…");
         bool ok = await _fms.DirectToAsync(ident);
-        _announcer.AnnounceImmediate(ok ? $"Direct to {ident}" : $"Direct-to {ident} failed");
-        if (ok) InvokeUI(() => _directToBox.Clear());
+        if (!ok) { _announcer.AnnounceImmediate($"Direct-to {ident} failed"); return; }
+
+        InvokeUI(() => _directToBox.Clear());
+        await Task.Delay(600);
+        string followResult = await _fms.FollowGpsPlanAsync();
+        _announcer.AnnounceImmediate($"Direct to {ident}. {followResult}");
     }
 
     // ── SimBrief ──────────────────────────────────────────────────────────────
@@ -360,7 +379,7 @@ public sealed class G1000NavigatorForm : Form
         _fplList.KeyDown += FplList_KeyDown;
         page.Controls.Add(_fplList);
         page.Controls.Add(new Label { Dock = DockStyle.Bottom, Height = 18,
-            Text = "Enter = activate leg (go direct)  |  GPS→NAV1 must be ON" });
+            Text = "Enter = Direct-To + auto-engage NAV mode (works forwards AND backwards)" });
         page.Controls.Add(_fplInfoBox);
         return page;
     }
