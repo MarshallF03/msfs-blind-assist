@@ -177,7 +177,8 @@ return JSON.stringify({
             bool navEngaged = false;
             for (int attempt = 0; attempt < 3 && !navEngaged; attempt++)
             {
-                await _cgt.EvaluateAsync("SimVar.SetSimVarValue('K:AP_PANEL_NAV1_HOLD','number',0);'ok'", 2000);
+                // AP_NAV1_HOLD is confirmed working; AP_PANEL_NAV1_HOLD does nothing on C172 KAP140
+                await _cgt.EvaluateAsync("SimVar.SetSimVarValue('K:AP_NAV1_HOLD','number',0);'ok'", 2000);
                 await Task.Delay(500 + attempt * 300);
                 string? check = await _cgt.EvaluateAsync(
                     "SimVar.GetSimVarValue('AUTOPILOT NAV1 LOCK','bool')>0?'1':'0'", 1500);

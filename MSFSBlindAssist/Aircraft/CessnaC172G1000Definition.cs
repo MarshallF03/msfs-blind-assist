@@ -1,4 +1,5 @@
 using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.SimConnect;
 
 namespace MSFSBlindAssist.Aircraft;
 
@@ -69,5 +70,54 @@ public class CessnaC172G1000Definition : CessnaC172BaseDefinition
         var mapping = base.GetButtonStateMapping();
         mapping["C172G_STBY_BATTERY_TOGGLE"] = "C172G_STBY_BATTERY_STATE";
         return mapping;
+    }
+
+    /// <summary>
+    /// Override NAV mode engagement so the panel NAV button turns off HDG first.
+    /// Confirmed via live testing 2026-05-31:
+    ///   - KAP140 rejects AP_NAV1_HOLD while AUTOPILOT HEADING LOCK is active
+    ///   - Must disable HDG, wait, then send AP_NAV1_HOLD
+    ///   - AP_PANEL_NAV1_HOLD does nothing on this aircraft
+    /// All other variables fall through to base class.
+    /// </summary>
+    public override bool HandleUIVariableSet(string varKey, double value,
+        SimVarDefinition varDef, SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
+    {
+        if (varKey == "C172_AP_NAV_STATE")
+        {
+            // Read current HDG state; if on, turn it off before engaging NAV
+            bool hdgOn = false;
+            try
+            {
+                double? cached = simConnect.GetCachedVariableValue("C172_AP_HDG_STATE");
+                hdgOn = cached.HasValue && cached.Value > 0.5;
+            }
+            catch { }
+
+            if (hdgOn)
+            {
+                // Turn off HDG first
+                simConnect.SendEvent("AP_PANEL_HEADING_HOLD");
+                // Brief async delay then NAV on — fire and forget
+                System.Threading.Tasks.Task.Run(async () =>
+                {
+                    await System.Threading.Tasks.Task.Delay(500);
+                    simConnect.SendEvent("AP_NAV1_HOLD");
+                    await System.Threading.Tasks.Task.Delay(400);
+                    bool navOn = (simConnect.GetCachedVariableValue("C172_AP_NAV_STATE") ?? 0) > 0.5;
+                    announcer.Announce($"NAV mode: {(navOn ? "ON" : "OFF — try again")}");
+                });
+                announcer.AnnounceImmediate("Turning off HDG then engaging NAV…");
+            }
+            else
+            {
+                // HDG already off — engage NAV directly
+                simConnect.SendEvent("AP_NAV1_HOLD");
+                announcer.AnnounceImmediate("NAV mode toggled");
+            }
+            return true;
+        }
+
+        return base.HandleUIVariableSet(varKey, value, varDef, simConnect, announcer);
     }
 }

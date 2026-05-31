@@ -1251,7 +1251,7 @@ public abstract class CessnaC172BaseDefinition : BaseAircraftDefinition
         ["C172_AP_MASTER_STATE"] = ("AP_MASTER", true),
         ["C172_AP_HDG_STATE"] = ("AP_PANEL_HEADING_HOLD", true),
         ["C172_AP_ALT_STATE"] = ("AP_PANEL_ALTITUDE_HOLD", true),
-        ["C172_AP_NAV_STATE"] = ("AP_PANEL_NAV1_HOLD", true),   // PANEL variant — consistent with HDG/ALT
+        ["C172_AP_NAV_STATE"] = ("AP_NAV1_HOLD", true),   // confirmed working; AP_PANEL_NAV1_HOLD does NOT work
         ["C172_AP_APR_STATE"] = ("AP_APR_HOLD", true),
         ["C172_AP_BC_STATE"] = ("AP_BC_HOLD", true),
         ["C172_AP_VS_STATE"] = ("AP_PANEL_VS_HOLD", true),
