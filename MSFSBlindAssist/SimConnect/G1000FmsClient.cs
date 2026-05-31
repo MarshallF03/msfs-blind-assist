@@ -102,6 +102,22 @@ public sealed class G1000FmsClient : IDisposable
         return r == "ok";
     }
 
+    /// <summary>
+    /// Direct-to an existing FPL leg by its segment indices. Works backwards AND forwards.
+    /// Preferred over createDirectToRandom for FPL waypoints — more reliable because
+    /// the FMS already has the waypoint data loaded.
+    /// </summary>
+    public async Task<bool> DirectToExistingAsync(int segIdx, int segLegIdx)
+    {
+        string js = $@"(function(){{try{{
+  var el=document.querySelector('wtg1000-mfd');
+  el.fms.createDirectToExisting(0,{segIdx},{segLegIdx});
+  return 'ok';
+}}catch(e){{return 'ERR:'+e.message;}}}})()";
+        string? r = await _cgt.EvaluateAsync(js, 3000);
+        return r == "ok";
+    }
+
     /// <summary>Direct-to any waypoint by ident (no visual dialog).</summary>
     public async Task<bool> DirectToAsync(string ident)
     {
@@ -347,7 +363,10 @@ return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1
       else if(leg.leg.altDesc===2)alt=' +'+ft;
       else if(leg.leg.altDesc===3)alt=' -'+ft;
     }}catch(e){}
-    legs.push({ident:ident,dist:parseFloat(dist.toFixed(2)),dtk:Math.round(dtk),alt:alt,index:i,active:i===al});
+    // Include segment indices so C# can call createDirectToExisting (works backwards too)
+    legs.push({ident:ident,dist:parseFloat(dist.toFixed(2)),dtk:Math.round(dtk),alt:alt,index:i,active:i===al,
+               segIdx:leg.segmentIndex!==undefined?leg.segmentIndex:-1,
+               segLeg:leg.segmentLegIndex!==undefined?leg.segmentLegIndex:-1});
   }catch(e){}}
   var proc={dep:-1,arr:-1,appr:-1};
   try{var pd=fp.procedureDetails;if(pd){proc.dep=pd.departureIndex;proc.arr=pd.arrivalIndex;proc.appr=pd.approachIndex;}}catch(e){}
@@ -410,8 +429,10 @@ return JSON.stringify({
 // Data models
 // ─────────────────────────────────────────────────────────────────────────────
 
-public record G1000FplLeg(string Ident, double Dist, int Dtk, string AltText, int Index, bool Active)
+public record G1000FplLeg(string Ident, double Dist, int Dtk, string AltText, int Index, bool Active,
+    int SegIdx = -1, int SegLeg = -1)
 {
+    public bool HasSegmentInfo => SegIdx >= 0 && SegLeg >= 0;
     public string DisplayText => Ident + AltText +
         (Dist > 0.05 ? $"  {Dist:F1} nm" : "") +
         (Dtk > 0 ? $"  {Dtk}°" : "");
@@ -433,12 +454,14 @@ public class G1000FplState : EventArgs
         if (r.TryGetProperty("legs", out var la) && la.ValueKind == JsonValueKind.Array)
             foreach (var l in la.EnumerateArray())
                 legs.Add(new G1000FplLeg(
-                    l.TryGetProperty("ident", out var id) ? id.GetString() ?? "?" : "?",
-                    l.TryGetProperty("dist",  out var di) ? di.GetDouble()     : 0,
-                    l.TryGetProperty("dtk",   out var dk) ? dk.GetInt32()      : 0,
-                    l.TryGetProperty("alt",   out var al) ? al.GetString() ?? "" : "",
-                    l.TryGetProperty("index", out var ix) ? ix.GetInt32()      : 0,
-                    l.TryGetProperty("active",out var ac) && ac.GetBoolean()));
+                    l.TryGetProperty("ident",  out var id) ? id.GetString() ?? "?" : "?",
+                    l.TryGetProperty("dist",   out var di) ? di.GetDouble()     : 0,
+                    l.TryGetProperty("dtk",    out var dk) ? dk.GetInt32()      : 0,
+                    l.TryGetProperty("alt",    out var al) ? al.GetString() ?? "" : "",
+                    l.TryGetProperty("index",  out var ix) ? ix.GetInt32()      : 0,
+                    l.TryGetProperty("active", out var ac) && ac.GetBoolean(),
+                    l.TryGetProperty("segIdx", out var si) ? si.GetInt32()      : -1,
+                    l.TryGetProperty("segLeg", out var sl) ? sl.GetInt32()      : -1));
 
         int P(string k) => r.TryGetProperty("proc", out var p) && p.TryGetProperty(k, out var v) ? v.GetInt32() : -1;
         return new G1000FplState

@@ -177,8 +177,18 @@ public sealed class G1000NavigatorForm : Form
     {
         _announcer.AnnounceImmediate($"Going direct to {leg.Ident}…");
 
-        // createDirectToRandom works backwards and forwards, unlike activateLeg
-        bool ok = await _fms.DirectToAsync(leg.Ident);
+        // Prefer createDirectToExisting (uses FMS segment indices, reliable for any direction)
+        // Fall back to createDirectToRandom if segment info not available
+        bool ok = leg.HasSegmentInfo
+            ? await _fms.DirectToExistingAsync(leg.SegIdx, leg.SegLeg)
+            : await _fms.DirectToAsync(leg.Ident);
+
+        if (!ok)
+        {
+            // Last resort: try by ident even if primary failed
+            ok = await _fms.DirectToAsync(leg.Ident);
+        }
+
         if (!ok)
         {
             _announcer.AnnounceImmediate($"Direct-to {leg.Ident} failed. Try the Direct-To tab instead.");
