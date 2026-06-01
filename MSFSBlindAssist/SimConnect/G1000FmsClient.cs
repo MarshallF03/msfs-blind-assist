@@ -72,8 +72,15 @@ public sealed class G1000FmsClient : IDisposable
     // Polling — called every 2 seconds
     // ─────────────────────────────────────────────────────────────────────────
 
+    // When a user operation runs, polling pauses so the background fpl/nav evals
+    // don't race the operation's response on the shared socket. Set via the
+    // RunOperationAsync wrapper below.
+    private volatile int _pollSuspended;
+
     private async Task PollAsync()
     {
+        if (_pollSuspended > 0) return;   // an operation is in flight — skip this tick
+
         if (!_cgt.IsConnected)
         {
             StopPolling();
@@ -81,13 +88,29 @@ public sealed class G1000FmsClient : IDisposable
             return;
         }
 
-        // Run both queries in parallel
-        var fplTask = _cgt.EvaluateAsync(JsFpl, 4000);
-        var navTask = _cgt.EvaluateAsync(JsNav, 3000);
-        await Task.WhenAll(fplTask, navTask);
+        // Run sequentially (not WhenAll) so the two evals never overlap their sends
+        string? fpl = await _cgt.EvaluateAsync(JsFpl, 4000);
+        if (_pollSuspended > 0) return;
+        string? nav = await _cgt.EvaluateAsync(JsNav, 3000);
 
-        if (fplTask.Result != null) ParseFpl(fplTask.Result);
-        if (navTask.Result != null) ParseNav(navTask.Result);
+        if (fpl != null) ParseFpl(fpl);
+        if (nav != null) ParseNav(nav);
+    }
+
+    /// <summary>
+    /// Run a user FMS operation with polling suspended, so the background
+    /// fpl/nav poll can't race the operation's response on the shared socket.
+    /// </summary>
+    private async Task<T> RunOperationAsync<T>(Func<Task<T>> op)
+    {
+        System.Threading.Interlocked.Increment(ref _pollSuspended);
+        try { return await op(); }
+        finally
+        {
+            // brief settle so an in-flight poll fully drains before we resume
+            await Task.Delay(150);
+            System.Threading.Interlocked.Decrement(ref _pollSuspended);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -121,8 +144,7 @@ public sealed class G1000FmsClient : IDisposable
   fms.createDirectToExisting(seg, segLeg);
   return 'ok';
 }}catch(e){{return 'ERR:'+e.message;}}}})()";
-        string? r = await _cgt.EvaluateAsync(js, 3000);
-        return r == "ok";
+        return await RunOperationAsync(async () => await _cgt.EvaluateAsync(js, 3000) == "ok");
     }
 
     /// <summary>Activate an existing leg by flat index (resume FPL nav to that leg).</summary>
@@ -135,8 +157,7 @@ public sealed class G1000FmsClient : IDisposable
   fms.activateLeg(seg, segLeg);
   return 'ok';
 }}catch(e){{return 'ERR:'+e.message;}}}})()";
-        string? r = await _cgt.EvaluateAsync(js, 3000);
-        return r == "ok";
+        return await RunOperationAsync(async () => await _cgt.EvaluateAsync(js, 3000) == "ok");
     }
 
     /// <summary>Remove a waypoint by flat leg index.</summary>
@@ -149,8 +170,7 @@ public sealed class G1000FmsClient : IDisposable
   fms.removeWaypoint(seg, segLeg);
   return 'ok';
 }}catch(e){{return 'ERR:'+e.message;}}}})()";
-        string? r = await _cgt.EvaluateAsync(js, 3000);
-        return r == "ok";
+        return await RunOperationAsync(async () => await _cgt.EvaluateAsync(js, 3000) == "ok");
     }
 
     /// <summary>
@@ -168,8 +188,7 @@ public sealed class G1000FmsClient : IDisposable
       : $"fms.setUserConstraint(seg, segLeg, {altFeet}, false);")}
   return 'ok';
 }}catch(e){{return 'ERR:'+e.message;}}}})()";
-        string? r = await _cgt.EvaluateAsync(js, 3000);
-        return r == "ok";
+        return await RunOperationAsync(async () => await _cgt.EvaluateAsync(js, 3000) == "ok");
     }
 
     /// <summary>Direct-to any waypoint by ident (manual entry; off-route fix allowed).</summary>
@@ -177,8 +196,7 @@ public sealed class G1000FmsClient : IDisposable
     {
         ident = ident.ToUpperInvariant().Replace("'", "").Trim();
         string js = $"(function(){{try{{{FmsRef}.createDirectToRandom('{ident}');return 'ok';}}catch(e){{return 'ERR:'+e.message;}}}})()";
-        string? r = await _cgt.EvaluateAsync(js);
-        return r == "ok";
+        return await RunOperationAsync(async () => await _cgt.EvaluateAsync(js) == "ok");
     }
 
     /// <summary>Vectors to final — activate the approach in VTF mode.</summary>
@@ -255,27 +273,27 @@ public sealed class G1000FmsClient : IDisposable
     public async Task<bool> InsertWaypointAsync(string ident, int flatIndex)
     {
         ident = ident.ToUpperInvariant().Replace("'", "").Trim();
-        // CORRECT search (verified live 2026-05-31):
-        //   searchByIdent(filter, ident, maxItems) where filter is a FacilitySearchType
-        //   NUMBER (All=0), NOT a FacilityType. Returns ICAO strings; the first char
-        //   gives the type (A=airport V=VOR N=NDB W=intersection) for getFacility.
+        // Use findNearestFacilitiesByIdent(filter, ident, lat, lon, maxItems) so an
+        // ambiguous ident (e.g. LAM exists in several countries) resolves to the
+        // one NEAREST the aircraft — not a random global match 1000nm away.
+        // lat/lon in radians. Falls back to plain searchByIdent if nearest fails.
         string js = $@"(async function(){{try{{
   var fms={FmsRef}; var fp=fms.getPrimaryFlightPlan();
-  var res=await fms.facLoader.searchByIdent(msfssdk.FacilitySearchType.All,'{ident}',10);
+  var lat=SimVar.GetSimVarValue('PLANE LATITUDE','radians');
+  var lon=SimVar.GetSimVarValue('PLANE LONGITUDE','radians');
+  var res=null;
+  try{{ res=await fms.facLoader.findNearestFacilitiesByIdent(msfssdk.FacilitySearchType.AllExceptVisual,'{ident}',lat,lon,20); }}catch(e){{}}
+  if(!res||res.length===0){{ res=await fms.facLoader.searchByIdent(msfssdk.FacilitySearchType.All,'{ident}',20); }}
   if(!res||res.length===0) return 'ERR:not found';
   var typeFor=function(icao){{var c=icao.charAt(0);
     return c==='A'?msfssdk.FacilityType.Airport:c==='V'?msfssdk.FacilityType.VOR:
            c==='N'?msfssdk.FacilityType.NDB:msfssdk.FacilityType.Intersection;}};
-  // Prefer an exact ident match; navaids (V/N) before fixes when ambiguous
+  // res[0] is nearest (findNearest sorts by distance). Prefer an exact navaid match if close.
   var pick=res[0];
-  for(var i=0;i<res.length;i++){{ var t=res[i].replace(/^[A-Z]\s+/,'').replace(/\x00/g,'').trim();
-    if(t.indexOf('{ident}')===0 && (res[i].charAt(0)==='V'||res[i].charAt(0)==='N')){{pick=res[i];break;}} }}
   var fac=await fms.facLoader.getFacility(typeFor(pick),pick);
   if(!fac) return 'ERR:load failed';
   var seg, legIdx;
   if({flatIndex}<0){{
-    // Append: target the ENROUTE segment, not the last leg's segment
-    // (which could be the approach). Fall back sensibly if no enroute exists.
     seg=(fms.findLastEnrouteSegmentIndex)?fms.findLastEnrouteSegmentIndex(fp):-1;
     if(seg<0) seg=fp.getSegmentIndex(Math.max(0,fp.length-1));
     legIdx=undefined;
@@ -287,8 +305,11 @@ public sealed class G1000FmsClient : IDisposable
   fms.insertWaypoint(seg, fac, legIdx);
   return 'ok:'+(fac.name||pick);
 }}catch(e){{return 'ERR:'+e.message;}}}})()";
-        string? r = await _cgt.EvaluatePromiseAsync(js, 12000);
-        return r != null && r.StartsWith("ok");
+        return await RunOperationAsync(async () =>
+        {
+            string? r = await _cgt.EvaluatePromiseAsync(js, 12000);
+            return r != null && r.StartsWith("ok");
+        });
     }
 
     /// <summary>Toggle GPS DRIVES NAV1. Returns new state (true=on).</summary>
@@ -464,16 +485,19 @@ return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1
       departures:mapProc(fac.departures),arrivals:mapProc(fac.arrivals),approaches:mapProc(fac.approaches)}});
   }}catch(e){{return JSON.stringify({{ok:false,err:e.message}});}}
 }})()";
-        string? r = await _cgt.EvaluatePromiseAsync(js, 15000);
-        if (r == null) return null;
-        try
+        return await RunOperationAsync<G1000FacilityData?>(async () =>
         {
-            using var doc = JsonDocument.Parse(r);
-            var root = doc.RootElement;
-            if (!root.TryGetProperty("ok", out var ok) || !ok.GetBoolean()) return null;
-            return G1000FacilityData.Parse(root);
-        }
-        catch { return null; }
+            string? r = await _cgt.EvaluatePromiseAsync(js, 15000);
+            if (r == null) return null;
+            try
+            {
+                using var doc = JsonDocument.Parse(r);
+                var root = doc.RootElement;
+                if (!root.TryGetProperty("ok", out var ok) || !ok.GetBoolean()) return null;
+                return G1000FacilityData.Parse(root);
+            }
+            catch { return null; }
+        });
     }
 
     /// <summary>Insert + optionally activate an approach. Correct positional signature.</summary>
@@ -488,8 +512,11 @@ return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1
     return 'ok';
   }}catch(e){{return 'ERR:'+e.message;}}
 }})()";
-        string? r = await _cgt.EvaluatePromiseAsync(js, 12000);
-        return r == "ok";
+        return await RunOperationAsync(async () =>
+        {
+            string? r = await _cgt.EvaluatePromiseAsync(js, 12000);
+            return r == "ok";
+        });
     }
 
     /// <summary>Insert a departure SID. Correct positional signature.</summary>
@@ -504,8 +531,11 @@ return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1
     return 'ok';
   }}catch(e){{return 'ERR:'+e.message;}}
 }})()";
-        string? r = await _cgt.EvaluateAsync(js, 8000);
-        return r == "ok";
+        return await RunOperationAsync(async () =>
+        {
+            string? r = await _cgt.EvaluateAsync(js, 8000);
+            return r == "ok";
+        });
     }
 
     /// <summary>Insert an arrival STAR. Correct positional signature.</summary>
@@ -520,8 +550,11 @@ return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1
     return 'ok';
   }}catch(e){{return 'ERR:'+e.message;}}
 }})()";
-        string? r = await _cgt.EvaluateAsync(js, 8000);
-        return r == "ok";
+        return await RunOperationAsync(async () =>
+        {
+            string? r = await _cgt.EvaluateAsync(js, 8000);
+            return r == "ok";
+        });
     }
 
     /// <summary>Activate the loaded approach (begin flying it).</summary>
