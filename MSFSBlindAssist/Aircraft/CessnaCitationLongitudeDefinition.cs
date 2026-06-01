@@ -67,25 +67,59 @@ public sealed class CessnaCitationLongitudeDefinition : BaseAircraftDefinition
         "LON_FUEL_FLOW1", "LON_FUEL_FLOW2", "LON_FUEL_TOTAL_LBS"
     };
 
+    // AP mode state rendered as a toggle button (shows ON / Off). Continuously
+    // monitored so the button reflects the live mode and announces engage/disengage.
+    private static SimVarDefinition ApBtn(string name, string display) => new()
+    {
+        Name = name, DisplayName = display, Type = SimVarType.SimVar, Units = "Bool",
+        UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true, RenderAsButton = true,
+        ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "ON" }
+    };
+
+    /// <summary>The Longitude's CDP FMS client (set by MainForm). Autopilot commands
+    /// route through this because SimConnect events do not drive the WT autopilot.</summary>
+    public SimConnect.G5000FmsClient? Fms { get; set; }
+
+    // AP mode button key → the K-event that toggles it (sent via CDP).
+    private static readonly Dictionary<string, string> ApEventMap = new()
+    {
+        ["LON_AP_MASTER"] = "AP_MASTER",
+        ["LON_AP_FD"]     = "TOGGLE_FLIGHT_DIRECTOR",
+        ["LON_AP_YD"]     = "YAW_DAMPER_TOGGLE",
+        ["LON_AP_HDG"]    = "AP_HDG_HOLD",
+        ["LON_AP_NAV"]    = "AP_NAV1_HOLD",
+        ["LON_AP_APR"]    = "AP_APR_HOLD",
+        ["LON_AP_ALT"]    = "AP_ALT_HOLD",
+        ["LON_AP_FLC"]    = "FLIGHT_LEVEL_CHANGE",
+        ["LON_AP_VS"]     = "AP_VS_HOLD",
+    };
+
+    // AP value-set panel key → (K-event, unit) sent via CDP.
+    private static readonly Dictionary<string, (string ev, string unit)> ApValueMap = new()
+    {
+        ["LON_AP_ALT_SET"] = ("AP_ALT_VAR_SET_ENGLISH", "feet"),
+        ["LON_AP_HDG_SET"] = ("HEADING_BUG_SET", "degrees"),
+        ["LON_AP_VS_SET"]  = ("AP_VS_VAR_SET_ENGLISH", "feet per minute"),
+        ["LON_AP_SPD_SET"] = ("AP_SPD_VAR_SET", "knots"),
+    };
+
     public override Dictionary<string, SimVarDefinition> GetVariables()
     {
         var v = GetBaseVariables();
 
         // ===== AUTOPILOT (Garmin GFC) =====
-        v["LON_AP_MASTER_STATE"]  = OnOff("AUTOPILOT MASTER", "Autopilot Master");
-        v["LON_AP_MASTER_TOGGLE"] = Evt("AP_MASTER", "Autopilot Master Toggle");
-        v["LON_FD_STATE"]         = OnOff("AUTOPILOT FLIGHT DIRECTOR ACTIVE", "Flight Director");
-        v["LON_FD_TOGGLE"]        = Evt("TOGGLE_FLIGHT_DIRECTOR", "Flight Director Toggle");
-        v["LON_YD_STATE"]         = OnOff("AUTOPILOT YAW DAMPER", "Yaw Damper");
-        v["LON_YD_TOGGLE"]        = Evt("YAW_DAMPER_TOGGLE", "Yaw Damper Toggle");
-
-        v["LON_AP_HDG_BTN"]  = Evt("AP_HDG_HOLD", "HDG mode", button: true);
-        v["LON_AP_NAV_BTN"]  = Evt("AP_NAV1_HOLD", "NAV mode", button: true);
-        v["LON_AP_APR_BTN"]  = Evt("AP_APR_HOLD", "Approach mode", button: true);
-        v["LON_AP_ALT_BTN"]  = Evt("AP_ALT_HOLD", "Altitude hold", button: true);
-        v["LON_AP_VS_BTN"]   = Evt("AP_VS_HOLD", "Vertical speed mode", button: true);
-        v["LON_AP_FLC_BTN"]  = Evt("FLIGHT_LEVEL_CHANGE", "Flight level change / speed mode", button: true);
-        v["LON_AP_VNAV_BTN"] = Evt("AP_VNAV_HOLD", "VNAV mode", button: true);
+        // Mode controls are STATE variables rendered as toggle buttons (show ON/Off)
+        // and routed through CDP in HandleUIVariableSet — SimConnect events do not
+        // drive the WT autopilot (verified live).
+        v["LON_AP_MASTER"] = ApBtn("AUTOPILOT MASTER", "Autopilot Master");
+        v["LON_AP_FD"]     = ApBtn("AUTOPILOT FLIGHT DIRECTOR ACTIVE", "Flight Director");
+        v["LON_AP_YD"]     = ApBtn("AUTOPILOT YAW DAMPER", "Yaw Damper");
+        v["LON_AP_HDG"]    = ApBtn("AUTOPILOT HEADING LOCK", "HDG mode");
+        v["LON_AP_NAV"]    = ApBtn("AUTOPILOT NAV1 LOCK", "NAV mode");
+        v["LON_AP_APR"]    = ApBtn("AUTOPILOT APPROACH HOLD", "Approach mode");
+        v["LON_AP_ALT"]    = ApBtn("AUTOPILOT ALTITUDE LOCK", "Altitude hold");
+        v["LON_AP_FLC"]    = ApBtn("AUTOPILOT FLIGHT LEVEL CHANGE", "FLC (flight level change)");
+        v["LON_AP_VS"]     = ApBtn("AUTOPILOT VERTICAL HOLD", "Vertical speed mode");
 
         v["LON_AP_ALT_STATE"] = Cached("AUTOPILOT ALTITUDE LOCK VAR", "Selected Altitude", "feet");
         v["LON_AP_ALT_SET"]   = Evt("AP_ALT_VAR_SET_ENGLISH", "Set Selected Altitude", help: "Enter altitude in feet");
@@ -161,14 +195,12 @@ public sealed class CessnaCitationLongitudeDefinition : BaseAircraftDefinition
     {
         ["Autopilot Master"] = new List<string>
         {
-            "LON_AP_MASTER_STATE", "LON_AP_MASTER_TOGGLE",
-            "LON_FD_STATE", "LON_FD_TOGGLE",
-            "LON_YD_STATE", "LON_YD_TOGGLE"
+            "LON_AP_MASTER", "LON_AP_FD", "LON_AP_YD"
         },
         ["Autopilot Modes"] = new List<string>
         {
-            "LON_AP_HDG_BTN", "LON_AP_NAV_BTN", "LON_AP_APR_BTN",
-            "LON_AP_ALT_BTN", "LON_AP_VS_BTN", "LON_AP_FLC_BTN", "LON_AP_VNAV_BTN"
+            "LON_AP_HDG", "LON_AP_NAV", "LON_AP_APR",
+            "LON_AP_ALT", "LON_AP_FLC", "LON_AP_VS"
         },
         ["Autopilot Settings"] = new List<string>
         {
@@ -256,38 +288,68 @@ public sealed class CessnaCitationLongitudeDefinition : BaseAircraftDefinition
 
             case HotkeyAction.FCUSetAltitude:
                 hotkeyManager.ExitInputHotkeyMode();
-                return ShowFCUInputDialog(
-                    "Set Selected Altitude", "Altitude", "0 to 45000 feet",
-                    "AP_ALT_VAR_SET_ENGLISH", simConnect, announcer, parentForm,
-                    input => (double.TryParse(input, out double v) && v >= 0 && v <= 45000,
-                              "Enter 0 to 45000 feet"));
+                return FcuSetViaCdp("Set Selected Altitude", "Altitude", "0 to 45000 feet",
+                    "AP_ALT_VAR_SET_ENGLISH", "feet", announcer, parentForm,
+                    input => (double.TryParse(input, out double v) && v >= 0 && v <= 45000, "Enter 0 to 45000 feet"));
 
             case HotkeyAction.FCUSetHeading:
                 hotkeyManager.ExitInputHotkeyMode();
-                return ShowFCUInputDialog(
-                    "Set Heading Bug", "Heading", "0 to 359",
-                    "HEADING_BUG_SET", simConnect, announcer, parentForm,
-                    input => (double.TryParse(input, out double v) && v >= 0 && v <= 359,
-                              "Enter a heading 0 to 359"));
+                return FcuSetViaCdp("Set Heading Bug", "Heading", "0 to 359",
+                    "HEADING_BUG_SET", "degrees", announcer, parentForm,
+                    input => (double.TryParse(input, out double v) && v >= 0 && v <= 359, "Enter a heading 0 to 359"));
 
             case HotkeyAction.FCUSetSpeed:
                 hotkeyManager.ExitInputHotkeyMode();
-                return ShowFCUInputDialog(
-                    "Set Selected Airspeed", "Airspeed", "80 to 350 knots",
-                    "AP_SPD_VAR_SET", simConnect, announcer, parentForm,
-                    input => (double.TryParse(input, out double v) && v >= 80 && v <= 350,
-                              "Enter 80 to 350 knots"));
+                return FcuSetViaCdp("Set Selected Airspeed", "Airspeed", "80 to 350 knots",
+                    "AP_SPD_VAR_SET", "knots", announcer, parentForm,
+                    input => (double.TryParse(input, out double v) && v >= 80 && v <= 350, "Enter 80 to 350 knots"));
 
             case HotkeyAction.FCUSetVS:
                 hotkeyManager.ExitInputHotkeyMode();
-                return ShowFCUInputDialog(
-                    "Set Vertical Speed", "Vertical Speed", "-6000 to 6000 fpm",
-                    "AP_VS_VAR_SET_ENGLISH", simConnect, announcer, parentForm,
-                    input => (double.TryParse(input, out double v) && v >= -6000 && v <= 6000,
-                              "Enter -6000 to 6000 fpm"),
-                    value => value >= 0 ? (uint)value : (uint)(65536 + value));
+                return FcuSetViaCdp("Set Vertical Speed", "Vertical Speed", "-6000 to 6000 fpm",
+                    "AP_VS_VAR_SET_ENGLISH", "feet per minute", announcer, parentForm,
+                    input => (double.TryParse(input, out double v) && v >= -6000 && v <= 6000, "Enter -6000 to 6000 fpm"));
         }
         return base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager);
+    }
+
+    /// <summary>Show an accessible value dialog and send the AP value-set through CDP
+    /// (SimConnect events don't drive the WT autopilot).</summary>
+    private bool FcuSetViaCdp(string title, string param, string range, string kEvent, string unit,
+        ScreenReaderAnnouncer announcer, Form parentForm, Func<string, (bool, string)> validator)
+    {
+        if (Fms == null)
+        {
+            announcer.AnnounceImmediate("FMS link not ready. Open the Longitude FMS window once with input mode then Shift M.");
+            return true;
+        }
+        var dlg = new Forms.ValueInputForm(title, param, range, announcer, validator);
+        if (dlg.ShowDialog(parentForm) == DialogResult.OK && dlg.IsValidInput
+            && double.TryParse(dlg.InputValue.Trim(), out double val))
+        {
+            _ = Fms.SendApCommandAsync(kEvent, val, unit);
+        }
+        return true;
+    }
+
+    /// <summary>Route autopilot mode toggles and value-sets through the CDP channel —
+    /// SimConnect TransmitClientEvent does not reach the WT G3000/G5000 autopilot.</summary>
+    public override bool HandleUIVariableSet(string varKey, double value, SimVarDefinition varDef,
+        SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
+    {
+        if (ApEventMap.TryGetValue(varKey, out string? ev))
+        {
+            if (Fms == null) { announcer.AnnounceImmediate("FMS link not ready. Open the Longitude FMS window once."); return true; }
+            _ = Fms.SendApCommandAsync(ev);
+            return true;
+        }
+        if (ApValueMap.TryGetValue(varKey, out (string ev, string unit) vm))
+        {
+            if (Fms == null) { announcer.AnnounceImmediate("FMS link not ready. Open the Longitude FMS window once."); return true; }
+            _ = Fms.SendApCommandAsync(vm.ev, value, vm.unit);
+            return true;
+        }
+        return base.HandleUIVariableSet(varKey, value, varDef, simConnect, announcer);
     }
 
     private static void AnnounceCached(SimConnectManager simConnect, ScreenReaderAnnouncer announcer,
@@ -315,9 +377,6 @@ public sealed class CessnaCitationLongitudeDefinition : BaseAircraftDefinition
 
     public override Dictionary<string, string> GetButtonStateMapping() => new()
     {
-        ["LON_AP_MASTER_TOGGLE"]  = "LON_AP_MASTER_STATE",
-        ["LON_FD_TOGGLE"]         = "LON_FD_STATE",
-        ["LON_YD_TOGGLE"]         = "LON_YD_STATE",
         ["LON_BEACON_TOGGLE"]     = "LON_BEACON_STATE",
         ["LON_NAV_TOGGLE"]        = "LON_NAV_STATE",
         ["LON_STROBE_TOGGLE"]     = "LON_STROBE_STATE",

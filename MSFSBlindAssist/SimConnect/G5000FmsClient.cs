@@ -166,6 +166,24 @@ public sealed class G5000FmsClient : IDisposable
     public async Task<bool> CancelDirectToAsync()
         => await _cgt.EvaluateAsync($"(function(){{try{{{FmsRef}.cancelDirectTo();return 'ok';}}catch(e){{return 'ERR:'+e.message;}}}})()") == "ok";
 
+    /// <summary>
+    /// Send an autopilot K-event (or value-set) through the CDP channel via
+    /// SimVar.SetSimVarValue('K:...'). This is the ONLY path that drives the WT
+    /// G3000/G5000 Garmin autopilot — SimConnect TransmitClientEvent (BA's normal
+    /// panel/event path) does NOT reach it (the WT avionics intercept these K-events
+    /// through their in-context JS layer). Verified live 2026-06-01: FLIGHT_LEVEL_CHANGE
+    /// engaged via SimVar.SetSimVarValue, did nothing from a SimConnect transmit.
+    /// Ensures the client is connected first. unit defaults to "number" for plain
+    /// toggles; pass "feet"/"knots"/"degrees"/"feet per minute" for value-sets.
+    /// </summary>
+    public async Task<bool> SendApCommandAsync(string kEvent, double value = 0, string unit = "number")
+    {
+        if (!_cgt.IsConnected && !await TryConnectAsync()) return false;
+        string v = value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        string js = $"(function(){{try{{SimVar.SetSimVarValue('K:{kEvent}','{unit}',{v});return 'ok';}}catch(e){{return 'ERR:'+e.message;}}}})()";
+        return await RunOperationAsync(async () => await _cgt.EvaluateAsync(js, 2500) == "ok");
+    }
+
     public async Task<bool> ActivateVtfAsync()
         => await _cgt.EvaluateJobAsync($"(async function(){{try{{await {FmsRef}.activateVtf();return 'ok';}}catch(e){{return 'ERR:'+e.message;}}}})()", 6000) == "ok";
 

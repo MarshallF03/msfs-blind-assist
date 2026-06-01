@@ -143,6 +143,13 @@ public partial class MainForm : Form
         var settings = MSFSBlindAssist.Settings.SettingsManager.Current;
         currentAircraft = LoadAircraftFromCode(settings.LastAircraft ?? "A320");
 
+        // If the Longitude was the last aircraft, wire its CDP autopilot channel.
+        if (currentAircraft is CessnaCitationLongitudeDefinition lonStartup)
+        {
+            _g5000Client ??= new MSFSBlindAssist.SimConnect.G5000FmsClient();
+            lonStartup.Fms = _g5000Client;
+        }
+
         InitializeComponent();
         InitializeManagers();
 
@@ -1803,6 +1810,10 @@ public partial class MainForm : Form
     {
         if (_g5000Client == null)
             _g5000Client = new MSFSBlindAssist.SimConnect.G5000FmsClient();
+
+        // Keep the Longitude definition's AP-command channel pointed at this client.
+        if (currentAircraft is CessnaCitationLongitudeDefinition lonDef)
+            lonDef.Fms = _g5000Client;
 
         if (_g5000NavigatorForm == null || _g5000NavigatorForm.IsDisposed)
             _g5000NavigatorForm = new Forms.GPS.G5000NavigatorForm(
@@ -3797,6 +3808,16 @@ public partial class MainForm : Form
     {
         // Update the aircraft instance
         currentAircraft = newAircraft;
+
+        // The Citation Longitude routes autopilot commands through the CDP FMS
+        // client (SimConnect events don't drive the WT autopilot). Ensure the
+        // shared client exists and hand it to the definition so the AP panel
+        // buttons and Ctrl+A/H/S/V work even before the FMS window is opened.
+        if (newAircraft is CessnaCitationLongitudeDefinition lonDef)
+        {
+            _g5000Client ??= new MSFSBlindAssist.SimConnect.G5000FmsClient();
+            lonDef.Fms = _g5000Client;
+        }
 
         // Refresh aircraft-conditional menu items (FMC Settings is PMDG-only).
         UpdateAircraftSpecificMenuItems();
