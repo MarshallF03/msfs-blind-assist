@@ -274,12 +274,16 @@ public sealed class G1000FmsClient : IDisposable
   if(!fac) return 'ERR:load failed';
   var seg, legIdx;
   if({flatIndex}<0){{
-    seg=fp.getSegmentIndex(fp.length-1);
+    // Append: target the ENROUTE segment, not the last leg's segment
+    // (which could be the approach). Fall back sensibly if no enroute exists.
+    seg=(fms.findLastEnrouteSegmentIndex)?fms.findLastEnrouteSegmentIndex(fp):-1;
+    if(seg<0) seg=fp.getSegmentIndex(Math.max(0,fp.length-1));
     legIdx=undefined;
   }}else{{
     seg=fp.getSegmentIndex({flatIndex});
     legIdx=fp.getSegmentLegIndex({flatIndex});
   }}
+  if(seg<0) return 'ERR:no segment';
   fms.insertWaypoint(seg, fac, legIdx);
   return 'ok:'+(fac.name||pick);
 }}catch(e){{return 'ERR:'+e.message;}}}})()";
