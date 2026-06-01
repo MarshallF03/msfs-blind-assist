@@ -590,6 +590,94 @@ return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1
         return r == "ok";
     }
 
+    /// <summary>
+    /// One-button SAFE ILS setup — prevents the magenta-needles stall trap.
+    ///
+    /// The crash on 2026-06-01 happened because APPR was armed while GPS was
+    /// still driving NAV1 (CDI on magenta/GPS), so the autopilot's approach
+    /// logic had no localizer/glideslope to couple to. It sat armed forever,
+    /// holding altitude, until the aircraft stalled.
+    ///
+    /// This sequence does exactly what a sighted pilot does to set up an ILS:
+    ///   1. Stop GPS steering (the heading-bug emulation loop).
+    ///   2. Switch CDI to NAV1 / green needles  (GPS DRIVES NAV1 = 0)  — THE fix.
+    ///   3. Verify NAV1 has a frequency tuned and report localizer reception.
+    ///   4. Arm APPR mode (K:AP_APR_HOLD toggle, verified live).
+    ///
+    /// Returns a spoken-friendly status string describing what it did and any
+    /// remaining problem (no freq, no localizer signal, AP off).
+    /// Lateral intercept is still flown by the pilot (HDG) until LOC capture —
+    /// this button only guarantees the autopilot is looking at the real ILS.
+    /// </summary>
+    public async Task<string> SetUpIlsAsync()
+    {
+        return await RunOperationAsync(async () =>
+        {
+            // 1. Stop the GPSS heading-bug loop — it fights an ILS and can't fly a glideslope.
+            await StopGpsSteeringAsync();
+
+            // 2. Read current state.
+            const string readJs = @"(function(){var sv=SimVar.GetSimVarValue;
+return JSON.stringify({
+  ap:sv('AUTOPILOT MASTER','bool')>0,
+  gps:sv('GPS DRIVES NAV1','bool')>0,
+  freq:sv('NAV ACTIVE FREQUENCY:1','MHz'),
+  hasLoc:sv('NAV HAS LOCALIZER:1','bool')>0,
+  hasNav:sv('NAV HAS NAV:1','bool')>0,
+  appr:sv('AUTOPILOT APPROACH HOLD','bool')>0
+});})()";
+            string? j = await _cgt.EvaluateAsync(readJs, 3000);
+            if (j == null) return "Could not read autopilot state.";
+            bool ap, gps, hasLoc, hasNav, appr; double freq;
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(j);
+                var r = doc.RootElement;
+                ap     = r.GetProperty("ap").GetBoolean();
+                gps    = r.GetProperty("gps").GetBoolean();
+                freq   = r.GetProperty("freq").GetDouble();
+                hasLoc = r.GetProperty("hasLoc").GetBoolean();
+                hasNav = r.GetProperty("hasNav").GetBoolean();
+                appr   = r.GetProperty("appr").GetBoolean();
+            }
+            catch { return "Could not parse autopilot state."; }
+
+            var actions = new System.Collections.Generic.List<string>();
+
+            // 3. Green needles — switch CDI off GPS if needed.
+            if (gps)
+            {
+                await _cgt.EvaluateAsync("SimVar.SetSimVarValue('K:TOGGLE_GPS_DRIVES_NAV1','number',0);'ok'", 2000);
+                await Task.Delay(400);
+                actions.Add("CDI to green needles");
+            }
+            else actions.Add("CDI already on green needles");
+
+            // 4. Arm APPR if not already armed.
+            if (!appr)
+            {
+                await _cgt.EvaluateAsync("SimVar.SetSimVarValue('K:AP_APR_HOLD','number',0);'ok'", 2000);
+                await Task.Delay(700);
+                string? chk = await _cgt.EvaluateAsync("SimVar.GetSimVarValue('AUTOPILOT APPROACH HOLD','bool')>0?'1':'0'", 1500);
+                actions.Add(chk == "1" ? "APPR armed" : "APPR send — check panel");
+            }
+            else actions.Add("APPR already armed");
+
+            // 5. Build status with the warnings that matter.
+            var warns = new System.Collections.Generic.List<string>();
+            if (!ap) warns.Add("Autopilot master is OFF — engage it");
+            if (freq < 108.0 || freq > 111.95)
+                warns.Add($"NAV 1 frequency is {freq:0.00}, not an ILS frequency — tune the localizer");
+            else if (!hasLoc && !hasNav)
+                warns.Add($"NAV 1 tuned {freq:0.00} but no localizer signal yet — out of range or wrong frequency");
+
+            string head = "ILS setup. " + string.Join(", ", actions) + ".";
+            if (warns.Count > 0)
+                return head + " Warning. " + string.Join(". ", warns) + ".";
+            return head + $" NAV 1 receiving localizer on {freq:0.00}. Fly the localizer; glideslope will couple on intercept.";
+        });
+    }
+
     /// <summary>Cancel direct-to.</summary>
     public async Task<bool> CancelDirectToAsync()
     {

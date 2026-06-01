@@ -617,7 +617,24 @@ public sealed class G1000NavigatorForm : Form
             bool ok = await _fms.ActivateMissedApproachAsync();
             _announcer.AnnounceImmediate(ok ? "Missed approach activated" : "Missed approach failed");
         };
-        panel.Controls.Add(missedBtn);
+        panel.Controls.Add(missedBtn); y += 34;
+
+        // SAFE ILS setup — green needles + arm APPR, the anti-stall sequence.
+        var ilsBtn = new Button { Location = new Point(8, y), Size = new Size(388, 30),
+            Text = "Set &up ILS (green needles + arm APPR)",
+            AccessibleName = "Set up ILS approach" };
+        ilsBtn.Click += async (_, _) =>
+        {
+            ilsBtn.Enabled = false;
+            _announcer.AnnounceImmediate("Setting up ILS");
+            try
+            {
+                string result = await _fms.SetUpIlsAsync();
+                _announcer.AnnounceImmediate(result);
+            }
+            finally { ilsBtn.Enabled = true; }
+        };
+        panel.Controls.Add(ilsBtn);
 
         page.Controls.Add(panel); return page;
     }
