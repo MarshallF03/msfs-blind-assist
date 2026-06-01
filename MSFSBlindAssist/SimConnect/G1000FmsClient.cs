@@ -77,15 +77,31 @@ public sealed class G1000FmsClient : IDisposable
     // RunOperationAsync wrapper below.
     private volatile int _pollSuspended;
 
+    private bool _wasConnected;
+
     private async Task PollAsync()
     {
         if (_pollSuspended > 0) return;   // an operation is in flight — skip this tick
 
+        // Auto-reconnect (pattern from the A380 CoherentDebuggerClient): if the
+        // socket dropped or the G1000 page cycled (flight reload changes the page
+        // id), re-resolve by title and reconnect. The timer keeps running so it
+        // retries every tick until the page is back — no manual reopen needed.
         if (!_cgt.IsConnected)
         {
-            StopPolling();
-            Disconnected?.Invoke(this, EventArgs.Empty);
-            return;
+            if (_wasConnected)
+            {
+                _wasConnected = false;
+                Disconnected?.Invoke(this, EventArgs.Empty);
+            }
+            bool reconnected = await _cgt.TryConnectAsync(MfdTitleFilter);
+            if (!reconnected) return;     // keep the timer alive; try again next tick
+            _wasConnected = true;
+            Connected?.Invoke(this, EventArgs.Empty);
+        }
+        else
+        {
+            _wasConnected = true;
         }
 
         // Run sequentially (not WhenAll) so the two evals never overlap their sends
