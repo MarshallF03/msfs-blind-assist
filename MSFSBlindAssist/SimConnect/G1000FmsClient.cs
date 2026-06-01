@@ -656,7 +656,17 @@ return JSON.stringify({
   apprActive:sv('GPS IS APPROACH ACTIVE','bool')>0,
   isDto:sv('GPS IS DIRECTTO FLIGHTPLAN','bool')>0,
   apMaster:sv('AUTOPILOT MASTER','bool')>0,
-  gpss:(typeof window.__msfsba_gpss!=='undefined' && window.__msfsba_gpss!==null)
+  gpss:(typeof window.__msfsba_gpss!=='undefined' && window.__msfsba_gpss!==null),
+  // Approach/glideslope coupling state — for capture callouts so the pilot
+  // hears whether the autopilot actually grabbed the LOC and glide.
+  apprHold:sv('AUTOPILOT APPROACH HOLD','bool')>0,
+  navHold:sv('AUTOPILOT NAV1 LOCK','bool')>0,
+  gsArm:sv('AUTOPILOT GLIDESLOPE ARM','bool')>0,
+  gsActive:sv('AUTOPILOT GLIDESLOPE ACTIVE','bool')>0,
+  navHasNav:sv('NAV HAS NAV:1','bool')>0,
+  navHasGs:sv('NAV HAS GLIDE SLOPE:1','bool')>0,
+  gsDev:parseFloat((sv('NAV GLIDE SLOPE ERROR:1','degrees')||0).toFixed(2)),
+  altMode:sv('AUTOPILOT ALTITUDE LOCK','bool')>0
 });
 }catch(e){return null;}})()";
 
@@ -762,6 +772,14 @@ public class G1000NavState : EventArgs
     public bool   IsDirectTo    { get; init; }
     public bool   ApMaster      { get; init; }
     public bool   Gpss          { get; init; }
+    public bool   ApprHold      { get; init; }   // APPR mode (LOC/approach) armed or active
+    public bool   NavHold       { get; init; }
+    public bool   GsArm         { get; init; }   // glideslope armed
+    public bool   GsActive      { get; init; }   // glideslope captured
+    public bool   NavHasNav     { get; init; }   // NAV1 has a valid signal
+    public bool   NavHasGs      { get; init; }   // NAV1 has a glideslope signal
+    public double GsDev         { get; init; }   // glideslope deviation, degrees
+    public bool   AltMode       { get; init; }
 
     public string ApproachModeText => ApproachMode switch { 1 => "ARMED", 2 => "ACTIVE", _ => "none" };
     public string EteFormatted => Ete > 0 ? $"{Ete/60:D2}:{Ete%60:D2}" : "--:--";
@@ -777,7 +795,11 @@ public class G1000NavState : EventArgs
             Xtk  = G("xtk"),  Gs  = I("gs"),
             GpsDrivesNav = B("gpsDrivesNav"), ApproachMode = I("apprMode"),
             ApprLoaded = B("apprLoaded"), ApprActive = B("apprActive"), IsDirectTo = B("isDto"),
-            ApMaster = B("apMaster"), Gpss = B("gpss")
+            ApMaster = B("apMaster"), Gpss = B("gpss"),
+            ApprHold = B("apprHold"), NavHold = B("navHold"),
+            GsArm = B("gsArm"), GsActive = B("gsActive"),
+            NavHasNav = B("navHasNav"), NavHasGs = B("navHasGs"),
+            GsDev = G("gsDev"), AltMode = B("altMode")
         };
     }
 }

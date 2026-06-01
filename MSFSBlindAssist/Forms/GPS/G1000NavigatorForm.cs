@@ -99,6 +99,10 @@ public sealed class G1000NavigatorForm : Form
         });
     }
 
+    // Approach-state tracking for capture callouts
+    private bool _prevApprHold, _prevGsArm, _prevGsActive;
+    private bool _gsNotCapturedWarned;
+
     private void OnNav(object? sender, G1000NavState nav)
     {
         _lastNav = nav;
@@ -106,6 +110,49 @@ public sealed class G1000NavigatorForm : Form
         _gpsDrivesNav = nav.Gpss;
         if (steerChanged)
             _announcer.AnnounceImmediate(nav.Gpss ? "GPS steering ON" : "GPS steering OFF");
+
+        // ── Approach / glideslope capture callouts ──
+        // This is the safety layer that was missing — the pilot now HEARS whether
+        // the autopilot actually grabbed the localizer and glideslope.
+        if (nav.ApprHold && !_prevApprHold)
+            _announcer.AnnounceImmediate("Approach mode armed");
+        if (!nav.ApprHold && _prevApprHold)
+            _announcer.AnnounceImmediate("Approach mode off");
+
+        if (nav.GsArm && !_prevGsArm && !nav.GsActive)
+            _announcer.AnnounceImmediate("Glideslope armed");
+        if (nav.GsActive && !_prevGsActive)
+        {
+            _announcer.AnnounceImmediate("Glideslope captured, descending");
+            _gsNotCapturedWarned = false;
+        }
+        if (!nav.GsActive && _prevGsActive)
+            _announcer.AnnounceImmediate("Glideslope lost");
+
+        // CRITICAL WARNING: APPR armed, glideslope signal present and the needle is
+        // centred (you've reached the glidepath) but the autopilot has NOT captured.
+        // This is exactly the trap that caused the stall — fire once, loudly.
+        if (nav.ApprHold && nav.NavHasGs && !nav.GsActive
+            && Math.Abs(nav.GsDev) <= 0.3 && !_gsNotCapturedWarned)
+        {
+            _gsNotCapturedWarned = true;
+            _announcer.AnnounceImmediate(
+                "Warning. On glideslope but autopilot has NOT captured it. " +
+                "It will not descend. Fly the descent manually or go around.");
+        }
+        // Also warn if APPR is armed but there's no valid NAV signal at all
+        // (e.g. GPS still driving NAV1, or NAV1 not tuned to the ILS).
+        if (nav.ApprHold && !nav.NavHasNav && nav.GpsDrivesNav && !_gsNotCapturedWarned)
+        {
+            _gsNotCapturedWarned = true;
+            _announcer.AnnounceImmediate(
+                "Warning. Approach armed but GPS is driving NAV 1 — no localizer signal. " +
+                "Switch CDI to green needles, or this approach will not couple.");
+        }
+
+        _prevApprHold = nav.ApprHold;
+        _prevGsArm    = nav.GsArm;
+        _prevGsActive = nav.GsActive;
 
         InvokeUI(() =>
         {
@@ -126,6 +173,10 @@ public sealed class G1000NavigatorForm : Form
             if (nav.Gs > 1)      sb.AppendLine($"GS       : {nav.Gs} kts");
             sb.AppendLine();
             sb.AppendLine($"Approach : {nav.ApproachModeText}{(nav.ApprLoaded ? " (loaded)" : "")}{(nav.ApprActive ? " (active)" : "")}");
+            sb.AppendLine($"APPR mode: {(nav.ApprHold ? "ARMED/ACTIVE" : "off")}");
+            string gsState = nav.GsActive ? "CAPTURED" : nav.GsArm ? "armed" : nav.NavHasGs ? "signal, not armed" : "no signal";
+            sb.AppendLine($"Glideslope: {gsState}{(nav.NavHasGs ? $"  dev {nav.GsDev:+0.0;-0.0;0.0}°" : "")}");
+            sb.AppendLine($"NAV1 source: {(nav.GpsDrivesNav ? "GPS (magenta)" : "NAV/LOC (green)")}");
             sb.AppendLine($"Direct-To: {(nav.IsDirectTo ? "YES" : "no")}");
             _navBox.Text = sb.ToString().TrimEnd();
         });
