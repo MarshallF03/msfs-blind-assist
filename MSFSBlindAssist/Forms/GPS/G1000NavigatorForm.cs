@@ -102,17 +102,17 @@ public sealed class G1000NavigatorForm : Form
     private void OnNav(object? sender, G1000NavState nav)
     {
         _lastNav = nav;
-        bool gpsChanged = _gpsDrivesNav != nav.GpsDrivesNav;
-        _gpsDrivesNav = nav.GpsDrivesNav;
-        if (gpsChanged)
-            _announcer.AnnounceImmediate(nav.GpsDrivesNav ? "GPS drives NAV 1: ON" : "GPS drives NAV 1: OFF");
+        bool steerChanged = _gpsDrivesNav != nav.Gpss;  // reuse field to track steering state
+        _gpsDrivesNav = nav.Gpss;
+        if (steerChanged)
+            _announcer.AnnounceImmediate(nav.Gpss ? "GPS steering ON" : "GPS steering OFF");
 
         InvokeUI(() =>
         {
-            _gpsNavBtn.Text = nav.GpsDrivesNav
-                ? "GPS → NAV1: ON  (click OFF)"
-                : "GPS → NAV1: OFF  (click ON  ← needed for autopilot to follow)";
-            _gpsNavBtn.BackColor = nav.GpsDrivesNav ? System.Drawing.Color.DarkGreen : System.Drawing.Color.DarkRed;
+            _gpsNavBtn.Text = nav.Gpss
+                ? "GPS STEERING: ON  (click to stop)"
+                : "GPS STEERING: OFF  (click to FOLLOW the GPS)";
+            _gpsNavBtn.BackColor = nav.Gpss ? System.Drawing.Color.DarkGreen : System.Drawing.Color.DarkRed;
             _gpsNavBtn.ForeColor = System.Drawing.Color.White;
 
             var active = _lastFpl?.Legs.FirstOrDefault(l => l.Active);
@@ -179,33 +179,34 @@ public sealed class G1000NavigatorForm : Form
     }
 
     /// <summary>
-    /// The main "go there" action — works for any waypoint in the FPL, including ones
-    /// before the current active leg (turn around / go back). Uses createDirectToRandom
-    /// which works in any direction, then immediately engages GPS→NAV1 + NAV mode so
-    /// the autopilot starts turning straight away. One keypress does everything.
+    /// The main "go there" action — works for ANY waypoint in the FPL, forwards or
+    /// backwards. Makes the waypoint active, then starts GPS Steering (GPSS): the
+    /// autopilot flies the heading bug which we drive to the GPS bearing every second,
+    /// so the plane turns onto course and tracks directly to the waypoint.
+    /// One keypress does everything — and it actually turns (verified live).
     /// </summary>
     private async Task DirectToAndFollowAsync(G1000FplLeg leg)
     {
-        _announcer.AnnounceImmediate($"Going direct to {leg.Ident}…");
+        _announcer.AnnounceImmediate($"Direct to {leg.Ident}, engaging GPS steering…");
 
-        // DirectToLegIndexAsync converts the flat index to segment addressing inside JS
-        // (createDirectToExisting with correct positional args — works any direction)
+        // Make the waypoint the active leg (works any direction)
         bool ok = await _fms.DirectToLegIndexAsync(leg.Index);
-        if (!ok) ok = await _fms.DirectToAsync(leg.Ident); // fallback by ident
-
+        if (!ok) ok = await _fms.DirectToAsync(leg.Ident);
         if (!ok)
         {
-            _announcer.AnnounceImmediate($"Direct-to {leg.Ident} failed. Try the Direct-To tab instead.");
+            _announcer.AnnounceImmediate($"Direct-to {leg.Ident} failed.");
             return;
         }
 
-        // Give the G1000 FMS time to process the direct-to and stabilise
-        // before we try to engage NAV mode (too early = AP state in flux)
-        await Task.Delay(1200);
+        await Task.Delay(600); // let the GPS recompute bearing to the new active wp
 
-        // Engage GPS→NAV1 + NAV mode so the autopilot starts turning
-        string followResult = await _fms.FollowGpsPlanAsync();
-        _announcer.AnnounceImmediate($"Direct to {leg.Ident}. {followResult}");
+        // GPS Steering: HDG mode + heading bug chases GPS bearing (the reliable path)
+        bool steering = await _fms.StartGpsSteeringAsync();
+        bool apOn = await _fms.IsAutopilotOnAsync();
+        string apNote = apOn ? "" : " Autopilot is OFF — turn it on to fly the turn.";
+        _announcer.AnnounceImmediate(steering
+            ? $"Direct to {leg.Ident}. GPS steering on, turning onto course.{apNote}"
+            : $"Direct to {leg.Ident} set, but GPS steering failed to start.");
     }
 
     // ── Procedures ────────────────────────────────────────────────────────────
@@ -282,14 +283,18 @@ public sealed class G1000NavigatorForm : Form
         string ident = _directToBox.Text.Trim().ToUpperInvariant();
         if (string.IsNullOrWhiteSpace(ident)) { _announcer.AnnounceImmediate("Enter a waypoint ICAO"); return; }
 
-        _announcer.AnnounceImmediate($"Going direct to {ident}…");
+        _announcer.AnnounceImmediate($"Direct to {ident}, engaging GPS steering…");
         bool ok = await _fms.DirectToAsync(ident);
         if (!ok) { _announcer.AnnounceImmediate($"Direct-to {ident} failed"); return; }
 
         InvokeUI(() => _directToBox.Clear());
-        await Task.Delay(1200);
-        string followResult = await _fms.FollowGpsPlanAsync();
-        _announcer.AnnounceImmediate($"Direct to {ident}. {followResult}");
+        await Task.Delay(600);
+        bool steering = await _fms.StartGpsSteeringAsync();
+        bool apOn = await _fms.IsAutopilotOnAsync();
+        string apNote = apOn ? "" : " Autopilot is OFF — turn it on.";
+        _announcer.AnnounceImmediate(steering
+            ? $"Direct to {ident}. GPS steering on, turning onto course.{apNote}"
+            : $"Direct to {ident} set, GPS steering failed.");
     }
 
     // ── SimBrief ──────────────────────────────────────────────────────────────
@@ -348,39 +353,50 @@ public sealed class G1000NavigatorForm : Form
         _navBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true,
             ScrollBars = ScrollBars.Vertical, AccessibleName = "Active nav info", Text = "Waiting for data…" };
 
-        // BIG button — the main IFR action
-        var followBtn = new Button
+        // BIG button — GPS Steering: the reliable "follow the GPS" action.
+        // Drives the heading bug to the GPS bearing so the autopilot turns onto
+        // course and tracks to the active waypoint (works where NAV mode doesn't).
+        _gpsNavBtn = new Button
         {
-            Dock = DockStyle.Top, Height = 40,
-            Text = "FOLLOW GPS PLAN  (GPS→NAV1 + KAP140 NAV mode)",
-            AccessibleName = "Follow GPS flight plan",
-            AccessibleDescription = "Enables GPS drives NAV1 and engages KAP140 NAV mode so autopilot follows the active FPL leg. Smart — reads state first.",
-            BackColor = System.Drawing.Color.DarkBlue, ForeColor = System.Drawing.Color.White,
+            Dock = DockStyle.Top, Height = 42,
+            Text = "GPS STEERING: OFF  (click to FOLLOW the GPS)",
+            AccessibleName = "Toggle GPS steering",
+            AccessibleDescription = "Engages HDG mode and drives the heading bug to the GPS bearing so the autopilot flies the flight plan. Autopilot master must be on.",
+            BackColor = System.Drawing.Color.DarkRed, ForeColor = System.Drawing.Color.White,
             Font = new System.Drawing.Font(System.Drawing.SystemFonts.DefaultFont, System.Drawing.FontStyle.Bold)
         };
-        followBtn.Click += async (_, _) =>
-        {
-            string result = await _fms.FollowGpsPlanAsync();
-            _announcer.AnnounceImmediate(result);
-        };
-
-        // Secondary toggle for GPS drives NAV1 alone
-        _gpsNavBtn = new Button { Dock = DockStyle.Top, Height = 28,
-            Text = "GPS → NAV1: OFF  (toggle only)",
-            AccessibleName = "Toggle GPS drives NAV 1",
-            BackColor = System.Drawing.Color.DarkRed, ForeColor = System.Drawing.Color.White };
         _gpsNavBtn.Click += async (_, _) =>
         {
-            bool newState = await _fms.ToggleGpsDrivesNavAsync();
-            _announcer.AnnounceImmediate($"GPS drives NAV 1: {(newState ? "ON" : "OFF")}");
+            bool active = await _fms.IsGpsSteeringActiveAsync();
+            if (active)
+            {
+                await _fms.StopGpsSteeringAsync();
+                _announcer.AnnounceImmediate("GPS steering OFF");
+            }
+            else
+            {
+                bool ok = await _fms.StartGpsSteeringAsync();
+                bool apOn = await _fms.IsAutopilotOnAsync();
+                _announcer.AnnounceImmediate(ok
+                    ? (apOn ? "GPS steering ON — following the flight plan." : "GPS steering ON, but autopilot master is OFF — turn it on.")
+                    : "GPS steering failed to start.");
+            }
+        };
+
+        // Autopilot master toggle (so you can engage AP without leaving this window)
+        var apBtn = new Button { Dock = DockStyle.Top, Height = 28, Text = "&Autopilot master toggle" };
+        apBtn.Click += async (_, _) =>
+        {
+            bool on = await _fms.ToggleAutopilotAsync();
+            _announcer.AnnounceImmediate($"Autopilot master {(on ? "ON" : "OFF")}");
         };
 
         var refreshBtn = new Button { Dock = DockStyle.Top, Height = 26, Text = "&Reconnect / Refresh (F5)" };
         refreshBtn.Click += (_, _) => { if (!_fms.IsConnected) _ = ConnectAndRefreshAsync(); };
 
         page.Controls.Add(_navBox);
+        page.Controls.Add(apBtn);
         page.Controls.Add(_gpsNavBtn);
-        page.Controls.Add(followBtn);
         page.Controls.Add(refreshBtn);
         return page;
     }

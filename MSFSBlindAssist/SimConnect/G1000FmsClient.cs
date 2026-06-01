@@ -291,6 +291,73 @@ public sealed class G1000FmsClient : IDisposable
     }
 
     /// <summary>
+    /// GPS STEERING (GPSS emulation) — the reliable way to make the autopilot
+    /// follow the GPS, proven live 2026-05-31.
+    ///
+    /// WHY: the C172 KAP140's NAV mode engages (AUTOPILOT NAV1 LOCK=1) but
+    /// commands ZERO bank when GPS drives NAV1 (it gates on NAV HAS NAV which is
+    /// false with an untuned VOR). HDG mode works perfectly. So we do what real
+    /// aftermarket GPSS converters do: keep HDG mode engaged and continuously
+    /// drive the heading bug to the GPS bearing-to-waypoint. The aircraft flies
+    /// directly to the active waypoint and sequences through the plan.
+    ///
+    /// The steering loop runs INSIDE the G1000 page (setInterval) so it keeps
+    /// working between C# polls and survives navigator-form restarts.
+    /// </summary>
+    public async Task<bool> StartGpsSteeringAsync()
+    {
+        const string js = @"(function(){try{
+  if(!SimVar.GetSimVarValue('AUTOPILOT HEADING LOCK','bool'))
+    SimVar.SetSimVarValue('K:AP_PANEL_HEADING_HOLD','number',0);
+  if(window.__msfsba_gpss) clearInterval(window.__msfsba_gpss);
+  window.__msfsba_gpss=setInterval(function(){
+    try{
+      var wp=SimVar.GetSimVarValue('GPS WP NEXT ID','string');
+      var brg=SimVar.GetSimVarValue('GPS WP BEARING','degrees');
+      if(wp && typeof brg==='number' && !isNaN(brg)){
+        if(!SimVar.GetSimVarValue('AUTOPILOT HEADING LOCK','bool'))
+          SimVar.SetSimVarValue('K:AP_PANEL_HEADING_HOLD','number',0);
+        SimVar.SetSimVarValue('K:HEADING_BUG_SET','number',Math.round(brg));
+      }
+    }catch(e){}
+  },1000);
+  return 'ok';
+}catch(e){return 'ERR:'+e.message;}})()";
+        string? r = await _cgt.EvaluateAsync(js, 4000);
+        return r == "ok";
+    }
+
+    /// <summary>Stop GPS steering (clears the in-page loop). Leaves HDG mode as-is.</summary>
+    public async Task<bool> StopGpsSteeringAsync()
+    {
+        const string js = "(function(){if(window.__msfsba_gpss){clearInterval(window.__msfsba_gpss);window.__msfsba_gpss=null;return 'ok';}return 'notrunning';})()";
+        string? r = await _cgt.EvaluateAsync(js, 3000);
+        return r == "ok" || r == "notrunning";
+    }
+
+    /// <summary>Is GPS steering currently running in the page?</summary>
+    public async Task<bool> IsGpsSteeringActiveAsync()
+    {
+        string? r = await _cgt.EvaluateAsync("window.__msfsba_gpss?'1':'0'", 2000);
+        return r == "1";
+    }
+
+    /// <summary>Is the autopilot master engaged?</summary>
+    public async Task<bool> IsAutopilotOnAsync()
+    {
+        string? r = await _cgt.EvaluateAsync("SimVar.GetSimVarValue('AUTOPILOT MASTER','bool')>0?'1':'0'", 2000);
+        return r == "1";
+    }
+
+    /// <summary>Toggle the autopilot master on/off. Returns new state.</summary>
+    public async Task<bool> ToggleAutopilotAsync()
+    {
+        const string js = "(function(){SimVar.SetSimVarValue('K:AP_MASTER','number',0);return SimVar.GetSimVarValue('AUTOPILOT MASTER','bool')>0?'on':'off';})()";
+        string? r = await _cgt.EvaluateAsync(js);
+        return r == "on";
+    }
+
+    /// <summary>
     /// One-button "Follow GPS flight plan" — the key IFR action.
     /// Ensures GPS drives NAV1, turns off HDG mode, engages NAV mode.
     /// Smart: reads current state first, only changes what needs changing.
@@ -520,7 +587,9 @@ return JSON.stringify({
   apprMode:sv('GPS APPROACH MODE','number'),
   apprLoaded:sv('GPS IS APPROACH LOADED','bool')>0,
   apprActive:sv('GPS IS APPROACH ACTIVE','bool')>0,
-  isDto:sv('GPS IS DIRECTTO FLIGHTPLAN','bool')>0
+  isDto:sv('GPS IS DIRECTTO FLIGHTPLAN','bool')>0,
+  apMaster:sv('AUTOPILOT MASTER','bool')>0,
+  gpss:(typeof window.__msfsba_gpss!=='undefined' && window.__msfsba_gpss!==null)
 });
 }catch(e){return null;}})()";
 
@@ -624,6 +693,8 @@ public class G1000NavState : EventArgs
     public bool   ApprLoaded    { get; init; }
     public bool   ApprActive    { get; init; }
     public bool   IsDirectTo    { get; init; }
+    public bool   ApMaster      { get; init; }
+    public bool   Gpss          { get; init; }
 
     public string ApproachModeText => ApproachMode switch { 1 => "ARMED", 2 => "ACTIVE", _ => "none" };
     public string EteFormatted => Ete > 0 ? $"{Ete/60:D2}:{Ete%60:D2}" : "--:--";
@@ -638,7 +709,8 @@ public class G1000NavState : EventArgs
             Dist = G("dist"), Brg = I("brg"), Ete = I("ete"), Dtk = I("dtk"),
             Xtk  = G("xtk"),  Gs  = I("gs"),
             GpsDrivesNav = B("gpsDrivesNav"), ApproachMode = I("apprMode"),
-            ApprLoaded = B("apprLoaded"), ApprActive = B("apprActive"), IsDirectTo = B("isDto")
+            ApprLoaded = B("apprLoaded"), ApprActive = B("apprActive"), IsDirectTo = B("isDto"),
+            ApMaster = B("apMaster"), Gpss = B("gpss")
         };
     }
 }
