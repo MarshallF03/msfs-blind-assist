@@ -159,12 +159,23 @@ public sealed class G1000NavigatorForm : Form
 
     private void FplList_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.KeyCode != Keys.Return) return;
-        int i = _fplList.SelectedIndex;
-        if (i < 0 || _lastFpl == null || i >= _lastFpl.Legs.Count) return;
-        var leg = _lastFpl.Legs[i];
-        _ = DirectToAndFollowAsync(leg);
-        e.Handled = e.SuppressKeyPress = true;
+        if (e.KeyCode == Keys.Return)
+        {
+            int i = _fplList.SelectedIndex;
+            if (i < 0 || _lastFpl == null || i >= _lastFpl.Legs.Count) return;
+            _ = DirectToAndFollowAsync(_lastFpl.Legs[i]);
+            e.Handled = e.SuppressKeyPress = true;
+        }
+        else if (e.KeyCode == Keys.Delete)
+        {
+            RemoveSelectedWaypoint();
+            e.Handled = e.SuppressKeyPress = true;
+        }
+        else if (e.KeyCode == Keys.A && e.Alt)
+        {
+            PromptAltitudeConstraint();
+            e.Handled = e.SuppressKeyPress = true;
+        }
     }
 
     /// <summary>
@@ -379,13 +390,97 @@ public sealed class G1000NavigatorForm : Form
         var page = new TabPage("Flight Plan") { AccessibleName = "Flight plan tab" };
         _fplInfoBox = new TextBox { Dock = DockStyle.Top, Height = 26, ReadOnly = true, AccessibleName = "Route" };
         _fplList = new ListBox { Dock = DockStyle.Fill, AccessibleName = "Flight plan legs",
-            AccessibleDescription = "Press Enter on a leg to activate it (go direct)" };
+            AccessibleDescription = "Enter: direct-to and follow. Delete: remove waypoint. Alt+A: set altitude constraint." };
         _fplList.KeyDown += FplList_KeyDown;
+
+        // Action buttons along the bottom
+        var btnPanel = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 36, FlowDirection = FlowDirection.LeftToRight };
+
+        var insertBtn = new Button { Text = "&Insert waypoint", AutoSize = true };
+        insertBtn.Click += (_, _) => PromptInsertWaypoint();
+        var removeBtn = new Button { Text = "&Remove waypoint", AutoSize = true };
+        removeBtn.Click += (_, _) => RemoveSelectedWaypoint();
+        var altBtn = new Button { Text = "Set &altitude", AutoSize = true };
+        altBtn.Click += (_, _) => PromptAltitudeConstraint();
+        var invertBtn = new Button { Text = "In&vert plan", AutoSize = true };
+        invertBtn.Click += async (_, _) =>
+        {
+            bool ok = await _fms.InvertPlanAsync();
+            _announcer.AnnounceImmediate(ok ? "Flight plan inverted" : "Invert failed");
+        };
+        var clearBtn = new Button { Text = "&Clear plan", AutoSize = true };
+        clearBtn.Click += async (_, _) =>
+        {
+            if (MessageBox.Show("Clear the entire flight plan?", "Confirm",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            bool ok = await _fms.ClearPlanAsync();
+            _announcer.AnnounceImmediate(ok ? "Flight plan cleared" : "Clear failed");
+        };
+        btnPanel.Controls.AddRange(new Control[] { insertBtn, removeBtn, altBtn, invertBtn, clearBtn });
+
         page.Controls.Add(_fplList);
         page.Controls.Add(new Label { Dock = DockStyle.Bottom, Height = 18,
-            Text = "Enter = Direct-To + auto-engage NAV mode (works forwards AND backwards)" });
+            Text = "Enter: direct-to + NAV  |  Delete: remove  |  Alt+A: altitude" });
+        page.Controls.Add(btnPanel);
         page.Controls.Add(_fplInfoBox);
         return page;
+    }
+
+    private void RemoveSelectedWaypoint()
+    {
+        int i = _fplList.SelectedIndex;
+        if (i < 0 || _lastFpl == null || i >= _lastFpl.Legs.Count) { _announcer.AnnounceImmediate("Select a waypoint first"); return; }
+        var leg = _lastFpl.Legs[i];
+        _ = Task.Run(async () =>
+        {
+            bool ok = await _fms.RemoveWaypointAsync(leg.Index);
+            _announcer.AnnounceImmediate(ok ? $"Removed {leg.Ident}" : $"Could not remove {leg.Ident}");
+        });
+    }
+
+    private void PromptAltitudeConstraint()
+    {
+        int i = _fplList.SelectedIndex;
+        if (i < 0 || _lastFpl == null || i >= _lastFpl.Legs.Count) { _announcer.AnnounceImmediate("Select a waypoint first"); return; }
+        var leg = _lastFpl.Legs[i];
+        var form = new ValueInputForm(
+            $"Altitude constraint for {leg.Ident}",
+            "Altitude in feet (0 to clear)",
+            $"Enter a crossing altitude in feet for {leg.Ident}, or 0 to remove the constraint.",
+            _announcer,
+            input => (int.TryParse(input.Trim(), out int a) && a >= 0 && a <= 60000, "Enter 0 to 60000"));
+        form.FormClosed += async (_, _) =>
+        {
+            if (form.DialogResult != DialogResult.OK || !int.TryParse(form.InputValue.Trim(), out int alt)) return;
+            bool ok = await _fms.SetAltitudeConstraintAsync(leg.Index, alt);
+            _announcer.AnnounceImmediate(ok
+                ? (alt > 0 ? $"{leg.Ident} altitude set to {alt} feet" : $"{leg.Ident} altitude constraint cleared")
+                : "Altitude constraint failed");
+        };
+        form.Show(this);
+    }
+
+    private void PromptInsertWaypoint()
+    {
+        int i = _fplList.SelectedIndex;  // insert before selected, or append if none selected
+        int beforeIndex = (i >= 0 && _lastFpl != null && i < _lastFpl.Legs.Count) ? _lastFpl.Legs[i].Index : -1;
+        var form = new ValueInputForm(
+            "Insert waypoint",
+            "Waypoint ICAO / ident",
+            beforeIndex >= 0
+                ? "Type a waypoint ident to insert before the selected leg."
+                : "Type a waypoint ident to append to the enroute portion.",
+            _announcer,
+            input => (input.Trim().Length >= 2, "Enter at least 2 characters"));
+        form.FormClosed += async (_, _) =>
+        {
+            if (form.DialogResult != DialogResult.OK || string.IsNullOrWhiteSpace(form.InputValue)) return;
+            string ident = form.InputValue.Trim().ToUpperInvariant();
+            _announcer.AnnounceImmediate($"Inserting {ident}…");
+            bool ok = await _fms.InsertWaypointAsync(ident, beforeIndex);
+            _announcer.AnnounceImmediate(ok ? $"Inserted {ident}" : $"Could not insert {ident} — check ident");
+        };
+        form.Show(this);
     }
 
     private TabPage BuildProcTab()
@@ -426,9 +521,36 @@ public sealed class G1000NavigatorForm : Form
             DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "Transition" };
         panel.Controls.Add(_transCombo); y += 36;
 
-        var actBtn = new Button { Location = new Point(86, y), Size = new Size(160, 28), Text = "&Activate selected" };
+        var actBtn = new Button { Location = new Point(86, y), Size = new Size(180, 28), Text = "&Load selected procedure" };
         actBtn.Click += ActivateProc_Click;
-        panel.Controls.Add(actBtn);
+        panel.Controls.Add(actBtn); y += 36;
+
+        // Approach-flying actions — the IFR business end
+        Lbl(panel, "Approach actions:", 8, y, 200); y += 24;
+
+        var activateApprBtn = new Button { Location = new Point(8, y), Size = new Size(190, 28), Text = "Acti&vate Approach" };
+        activateApprBtn.Click += async (_, _) =>
+        {
+            bool ok = await _fms.ActivateApproachAsync();
+            _announcer.AnnounceImmediate(ok ? "Approach activated" : "Activate approach failed");
+        };
+        panel.Controls.Add(activateApprBtn);
+
+        var vtfBtn = new Button { Location = new Point(206, y), Size = new Size(190, 28), Text = "Vectors To &Final" };
+        vtfBtn.Click += async (_, _) =>
+        {
+            bool ok = await _fms.ActivateVtfAsync();
+            _announcer.AnnounceImmediate(ok ? "Vectors to final activated" : "Vectors to final failed");
+        };
+        panel.Controls.Add(vtfBtn); y += 34;
+
+        var missedBtn = new Button { Location = new Point(8, y), Size = new Size(190, 28), Text = "Activate &Missed Approach" };
+        missedBtn.Click += async (_, _) =>
+        {
+            bool ok = await _fms.ActivateMissedApproachAsync();
+            _announcer.AnnounceImmediate(ok ? "Missed approach activated" : "Missed approach failed");
+        };
+        panel.Controls.Add(missedBtn);
 
         page.Controls.Add(panel); return page;
     }
