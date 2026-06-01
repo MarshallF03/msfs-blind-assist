@@ -873,6 +873,8 @@ public class SimBriefService
                     Ident      = fixIdent,
                     ViaAirway  = V(fix, "via_airway"),
                     Type       = V(fix, "type"),
+                    Lat        = ParseDouble(V(fix, "pos_lat")),
+                    Lon        = ParseDouble(V(fix, "pos_long")),
                     AltitudeFt = First(fix, "altitude_feet", "flight_level"),
                     DistLeg    = First(fix, "dist", "dist_leg", "leg_dist", "gc_dist", "distance"),
                     WindDir    = V(fix, "wind_dir"),

@@ -1,4 +1,5 @@
 using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.Models;
 using MSFSBlindAssist.Services;
 using MSFSBlindAssist.SimConnect;
 using System.Text;
@@ -39,6 +40,8 @@ public sealed class G1000NavigatorForm : Form
     private ComboBox   _transCombo   = null!;
     private TextBox    _directToBox  = null!;
     private TextBox    _sbBox        = null!;
+    private Button     _sbLoadBtn    = null!;
+    private SimBriefOFP? _lastOfp;
 
     public G1000NavigatorForm(G1000FmsClient fms, ScreenReaderAnnouncer announcer,
         string simbriefUsername = "")
@@ -358,6 +361,8 @@ public sealed class G1000NavigatorForm : Form
         try
         {
             var ofp = await new SimBriefService().FetchFullOFPAsync(_simbriefUsername);
+            _lastOfp = ofp;
+            InvokeUI(() => _sbLoadBtn.Enabled = true);
             string info =
                 $"{ofp.OriginIcao} → {ofp.DestIcao}\n" +
                 $"Cruise: FL{ofp.InitialAltitude}  {ofp.CruiseMach}M\n" +
@@ -370,9 +375,45 @@ public sealed class G1000NavigatorForm : Form
                 $"{ofp.OriginIcao} to {ofp.DestIcao}" +
                 (string.IsNullOrWhiteSpace(ofp.OriginSid) ? "" : $", SID {ofp.OriginSid}") +
                 (string.IsNullOrWhiteSpace(ofp.DestStar)  ? "" : $", STAR {ofp.DestStar}") +
-                ". Use G1000 SimBrief button to load route into FMS.");
+                ". Press Load route into G1000 to build the flight plan.");
         }
         catch (Exception ex) { _announcer.AnnounceImmediate($"SimBrief error: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Build the fetched SimBrief route into the G1000 primary flight plan.
+    /// Filters the navlog down to real enroute fixes (drops origin/destination
+    /// airports and SID/STAR fixes — those load via the Procedures tab) and
+    /// passes each with its SimBrief lat/lon so ambiguous idents resolve correctly.
+    /// </summary>
+    private async Task LoadSimbriefRouteIntoFmsAsync()
+    {
+        var ofp = _lastOfp;
+        if (ofp == null) { _announcer.AnnounceImmediate("Load SimBrief info first."); return; }
+        if (string.IsNullOrWhiteSpace(ofp.OriginIcao) || string.IsNullOrWhiteSpace(ofp.DestIcao))
+        { _announcer.AnnounceImmediate("SimBrief plan has no origin or destination."); return; }
+
+        // Enroute fixes only: exclude SID/STAR fixes and the origin/destination
+        // airports themselves (those are set as endpoints / loaded as procedures).
+        var enroute = ofp.NavLog
+            .Where(f => !f.IsSidStar
+                        && !string.IsNullOrWhiteSpace(f.Ident)
+                        && !f.Ident.Equals(ofp.OriginIcao, StringComparison.OrdinalIgnoreCase)
+                        && !f.Ident.Equals(ofp.DestIcao, StringComparison.OrdinalIgnoreCase)
+                        && !f.Type.Equals("apt", StringComparison.OrdinalIgnoreCase))
+            .Select(f => (f.Ident, f.Lat, f.Lon))
+            .ToList();
+
+        _sbLoadBtn.Enabled = false;
+        _announcer.AnnounceImmediate($"Building {ofp.OriginIcao} to {ofp.DestIcao}, {enroute.Count} waypoints. Please wait.");
+        try
+        {
+            string result = await _fms.LoadSimBriefRouteAsync(ofp.OriginIcao, ofp.DestIcao, enroute);
+            _announcer.AnnounceImmediate(result);
+            // The flight-plan list refreshes automatically on the next FMS poll (OnFpl).
+        }
+        catch (Exception ex) { _announcer.AnnounceImmediate($"Route load error: {ex.Message}"); }
+        finally { _sbLoadBtn.Enabled = true; }
     }
 
     // ── UI construction ───────────────────────────────────────────────────────
@@ -670,6 +711,17 @@ public sealed class G1000NavigatorForm : Form
         var sbBtn = new Button { Location = new Point(8, y), Size = new Size(150, 28), Text = "Load &SimBrief info" };
         sbBtn.Click += async (_, _) => await LoadSimbriefAsync();
         panel.Controls.Add(sbBtn);
+
+        _sbLoadBtn = new Button { Location = new Point(166, y), Size = new Size(190, 28),
+            Text = "Load &route into G1000", Enabled = false,
+            AccessibleName = "Load SimBrief route into G1000 flight plan" };
+        _sbLoadBtn.Click += async (_, _) => await LoadSimbriefRouteIntoFmsAsync();
+        panel.Controls.Add(_sbLoadBtn); y += 36;
+
+        panel.Controls.Add(new Label { Location = new Point(8, y), Size = new Size(600, 36),
+            Text = "Route load builds origin, enroute waypoints, and destination. " +
+                   "SID/STAR/approach are loaded separately on the Procedures tab.",
+            ForeColor = System.Drawing.SystemColors.GrayText });
 
         page.Controls.Add(panel); return page;
     }

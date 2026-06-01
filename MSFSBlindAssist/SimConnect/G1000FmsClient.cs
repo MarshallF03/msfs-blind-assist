@@ -337,6 +337,106 @@ public sealed class G1000FmsClient : IDisposable
         });
     }
 
+    /// <summary>
+    /// Build a full SimBrief route into the G1000 primary flight plan in one shot:
+    /// clears the plan, sets origin, appends each enroute fix, sets destination.
+    ///
+    /// Each enroute fix is resolved by ident NEAREST TO ITS OWN SimBrief lat/lon
+    /// (degrees) — so an ambiguous ident like LAM resolves to the correct one on
+    /// the route, not a random global match. This is far more reliable than the
+    /// single-waypoint insert (which resolves nearest the aircraft).
+    ///
+    /// Caller passes enroute fixes already filtered (no airports, no SID/STAR,
+    /// no TOC/TOD markers). Returns a spoken-friendly summary.
+    /// </summary>
+    public async Task<string> LoadSimBriefRouteAsync(
+        string originIcao, string destIcao,
+        System.Collections.Generic.IReadOnlyList<(string Ident, double Lat, double Lon)> enroute)
+    {
+        originIcao = (originIcao ?? "").ToUpperInvariant().Replace("'", "").Trim();
+        destIcao   = (destIcao   ?? "").ToUpperInvariant().Replace("'", "").Trim();
+
+        // Serialize enroute fixes to a JS array literal.
+        var sb = new System.Text.StringBuilder("[");
+        for (int i = 0; i < enroute.Count; i++)
+        {
+            var w = enroute[i];
+            string id = (w.Ident ?? "").ToUpperInvariant().Replace("'", "").Replace("\"", "").Trim();
+            if (id.Length == 0) continue;
+            if (sb.Length > 1) sb.Append(',');
+            sb.Append("{id:'").Append(id).Append("',lat:")
+              .Append(w.Lat.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(",lon:")
+              .Append(w.Lon.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('}');
+        }
+        sb.Append(']');
+        string wpArray = sb.ToString();
+
+        string js = $@"(async function(){{
+  var fms={FmsRef}; var FT=msfssdk.FacilityType; var FST=msfssdk.FacilitySearchType;
+  try{{
+    var getApt=async function(icao){{var f=null;
+      try{{f=await fms.facLoader.getFacility(FT.Airport,'A      '+icao+' ');}}catch(e){{}}
+      if(!f) try{{f=await fms.facLoader.getFacility(FT.Airport,icao);}}catch(e){{}}
+      return f;}};
+    await fms.emptyPrimaryFlightPlan();
+    var orig=await getApt('{originIcao}');
+    if(!orig) return JSON.stringify({{ok:false,err:'origin {originIcao} not found'}});
+    fms.setOrigin(orig);
+    var typeFor=function(ic){{var c=ic.charAt(0);
+      return c==='A'?FT.Airport:c==='V'?FT.VOR:c==='N'?FT.NDB:FT.Intersection;}};
+    var wps={wpArray};
+    var added=0; var skipped=[];
+    for(var i=0;i<wps.length;i++){{
+      var w=wps[i]; var icao=null;
+      try{{
+        var near=await fms.facLoader.findNearestFacilitiesByIdent(FST.AllExceptVisual,w.id,w.lat,w.lon,5);
+        if(near&&near.length>0) icao=(typeof near[0]==='string')?near[0]:near[0].icao;
+      }}catch(e){{}}
+      if(!icao){{ skipped.push(w.id); continue; }}
+      var fac=null; try{{fac=await fms.facLoader.getFacility(typeFor(icao),icao);}}catch(e){{}}
+      if(!fac){{ skipped.push(w.id); continue; }}
+      try{{
+        var fp=fms.getPrimaryFlightPlan();
+        var seg=(fms.findLastEnrouteSegmentIndex)?fms.findLastEnrouteSegmentIndex(fp):-1;
+        if(seg<0) seg=fp.getSegmentIndex(Math.max(0,fp.length-1));
+        fms.insertWaypoint(seg, fac);
+        added++;
+      }}catch(e){{ skipped.push(w.id); }}
+    }}
+    var dest=await getApt('{destIcao}');
+    if(dest) fms.setDestination(dest);
+    return JSON.stringify({{ok:true,added:added,total:wps.length,skipped:skipped,dest:dest?true:false}});
+  }}catch(e){{return JSON.stringify({{ok:false,err:e.message}});}}
+}})()";
+
+        return await RunOperationAsync(async () =>
+        {
+            string? r = await _cgt.EvaluateJobAsync(js, 30000);
+            if (r == null) return "SimBrief load failed — no response from G1000.";
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(r);
+                var root = doc.RootElement;
+                if (!root.GetProperty("ok").GetBoolean())
+                    return "SimBrief load failed: " +
+                        (root.TryGetProperty("err", out var er) ? er.GetString() : "unknown");
+                int added = root.GetProperty("added").GetInt32();
+                int total = root.GetProperty("total").GetInt32();
+                bool dest = root.TryGetProperty("dest", out var d) && d.GetBoolean();
+                var skipList = new System.Collections.Generic.List<string>();
+                if (root.TryGetProperty("skipped", out var sk) && sk.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    foreach (var s in sk.EnumerateArray()) skipList.Add(s.GetString() ?? "");
+
+                string msg = $"Route loaded. {originIcao} to {destIcao}, {added} of {total} enroute waypoints" +
+                             (dest ? ", destination set." : ", destination not found.");
+                if (skipList.Count > 0)
+                    msg += " Skipped " + string.Join(", ", skipList) + ". Add these manually.";
+                return msg;
+            }
+            catch (Exception ex) { return "SimBrief load: could not parse result — " + ex.Message; }
+        });
+    }
+
     /// <summary>Toggle GPS DRIVES NAV1. Returns new state (true=on).</summary>
     public async Task<bool> ToggleGpsDrivesNavAsync()
     {

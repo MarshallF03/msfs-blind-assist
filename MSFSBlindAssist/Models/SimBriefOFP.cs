@@ -134,6 +134,10 @@ public class SimBriefNavFix
     public string Ident      { get; set; } = "";
     public string ViaAirway  { get; set; } = "";
     public string Type       { get; set; } = "";
+    /// <summary>Fix latitude in degrees (from SimBrief pos_lat). 0 if unknown.</summary>
+    public double Lat        { get; set; }
+    /// <summary>Fix longitude in degrees (from SimBrief pos_long). 0 if unknown.</summary>
+    public double Lon        { get; set; }
     public string AltitudeFt { get; set; } = "";
     public string DistLeg    { get; set; } = "";
     public string DistCum    { get; set; } = "";
