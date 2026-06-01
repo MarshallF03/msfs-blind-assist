@@ -1,6 +1,7 @@
 using MSFSBlindAssist.SimConnect;
 using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.Forms;
 using System.Windows.Forms;
 
 namespace MSFSBlindAssist.Aircraft;
@@ -64,7 +65,9 @@ public sealed class CessnaCitationLongitudeDefinition : BaseAircraftDefinition
     private static readonly HashSet<string> SuppressedKeys = new()
     {
         "LON_AP_ALT_STATE", "LON_AP_HDG_STATE", "LON_AP_VS_STATE", "LON_AP_SPD_STATE",
-        "LON_FUEL_FLOW1", "LON_FUEL_FLOW2", "LON_FUEL_TOTAL_LBS"
+        "LON_FUEL_FLOW1", "LON_FUEL_FLOW2", "LON_FUEL_TOTAL_LBS",
+        "LON_GPS_WP_DIST", "LON_GPS_ETE", "LON_GS",
+        "LON_NAV1_FREQ", "LON_NAV1_HASLOC", "LON_NAV1_HASGS", "LON_NAV1_CDI", "LON_NAV1_GSI", "LON_NAV1_DME"
     };
 
     // AP mode state rendered as a toggle button (shows ON / Off). Continuously
@@ -179,6 +182,17 @@ public sealed class CessnaCitationLongitudeDefinition : BaseAircraftDefinition
         v["LON_ENG1_ITT"] = Display("TURB ENG ITT:1", "Engine 1 ITT", "celsius");
         v["LON_ENG2_ITT"] = Display("TURB ENG ITT:2", "Engine 2 ITT", "celsius");
 
+        // ===== NAV / GPS readout sources (cached for output hotkeys) =====
+        v["LON_GPS_WP_DIST"] = Cached("GPS WP DISTANCE", "Distance to next waypoint", "nautical miles");
+        v["LON_GPS_ETE"]     = Cached("GPS ETE", "Time to destination", "seconds");
+        v["LON_GS"]          = Cached("GPS GROUND SPEED", "Ground speed", "knots");
+        v["LON_NAV1_FREQ"]   = Cached("NAV ACTIVE FREQUENCY:1", "NAV1 frequency", "MHz");
+        v["LON_NAV1_HASLOC"] = Cached("NAV HAS LOCALIZER:1", "Localizer present", "Bool");
+        v["LON_NAV1_HASGS"]  = Cached("NAV HAS GLIDE SLOPE:1", "Glideslope present", "Bool");
+        v["LON_NAV1_CDI"]    = Cached("NAV CDI:1", "Localizer deviation", "number");
+        v["LON_NAV1_GSI"]    = Cached("NAV GSI:1", "Glideslope deviation", "number");
+        v["LON_NAV1_DME"]    = Cached("NAV DME:1", "DME distance", "nautical miles");
+
         return v;
     }
 
@@ -286,49 +300,127 @@ public sealed class CessnaCitationLongitudeDefinition : BaseAircraftDefinition
                 return true;
             }
 
+            case HotkeyAction.ReadDistanceToDest:
+            {
+                double? wp  = simConnect.GetCachedVariableValue("LON_GPS_WP_DIST");
+                double? ete = simConnect.GetCachedVariableValue("LON_GPS_ETE");
+                var parts = new List<string>();
+                if (wp.HasValue && wp.Value > 0) parts.Add($"Next waypoint {wp.Value:F1} miles");
+                if (ete.HasValue && ete.Value > 0 && ete.Value < 86400)
+                {
+                    int m = (int)Math.Round(ete.Value / 60.0);
+                    parts.Add(m >= 60 ? $"destination {m / 60} hours {m % 60} minutes" : $"destination {m} minutes");
+                }
+                announcer.AnnounceImmediate(parts.Count > 0 ? string.Join(", ", parts) : "Distance to destination not available");
+                return true;
+            }
+
+            case HotkeyAction.ReadILSGuidance:
+            {
+                double? freq   = simConnect.GetCachedVariableValue("LON_NAV1_FREQ");
+                double? hasLoc = simConnect.GetCachedVariableValue("LON_NAV1_HASLOC");
+                double? cdi    = simConnect.GetCachedVariableValue("LON_NAV1_CDI");
+                double? hasGs  = simConnect.GetCachedVariableValue("LON_NAV1_HASGS");
+                double? gsi    = simConnect.GetCachedVariableValue("LON_NAV1_GSI");
+                double? dme    = simConnect.GetCachedVariableValue("LON_NAV1_DME");
+                if (!freq.HasValue || freq.Value < 108)
+                {
+                    announcer.AnnounceImmediate("NAV 1 not tuned to an ILS");
+                    return true;
+                }
+                var parts = new List<string> { $"NAV 1 {freq.Value:F2}" };
+                if (hasLoc.HasValue && hasLoc.Value > 0)
+                {
+                    if (cdi.HasValue)
+                        parts.Add(Math.Abs(cdi.Value) < 5 ? "localizer centered"
+                            : cdi.Value > 0 ? $"localizer {Math.Abs(cdi.Value) / 12.7:F1} dots right"
+                                            : $"localizer {Math.Abs(cdi.Value) / 12.7:F1} dots left");
+                    if (hasGs.HasValue && hasGs.Value > 0 && gsi.HasValue)
+                        parts.Add(Math.Abs(gsi.Value) < 5 ? "glideslope centered"
+                            : gsi.Value > 0 ? $"glideslope {Math.Abs(gsi.Value) / 12.7:F1} dots low (fly down)"
+                                            : $"glideslope {Math.Abs(gsi.Value) / 12.7:F1} dots high (fly up)");
+                    if (dme.HasValue && dme.Value > 0) parts.Add($"DME {dme.Value:F1} miles");
+                }
+                else parts.Add("no localizer signal");
+                announcer.AnnounceImmediate(string.Join(", ", parts));
+                return true;
+            }
+
             case HotkeyAction.FCUSetAltitude:
                 hotkeyManager.ExitInputHotkeyMode();
                 return FcuSetViaCdp("Set Selected Altitude", "Altitude", "0 to 45000 feet",
                     "AP_ALT_VAR_SET_ENGLISH", "feet", announcer, parentForm,
-                    input => (double.TryParse(input, out double v) && v >= 0 && v <= 45000, "Enter 0 to 45000 feet"));
+                    input => (double.TryParse(input, out double v) && v >= 0 && v <= 45000, "Enter 0 to 45000 feet"),
+                    new List<ToggleButtonDef>
+                    {
+                        new("&FLC climb/descend to selected", () => ApStateText(simConnect, "LON_AP_FLC"),
+                            () => { _ = Fms?.SendApCommandAsync("FLIGHT_LEVEL_CHANGE"); }),
+                        new("&VNAV", () => "press to toggle",
+                            () => { _ = Fms?.SendApCommandAsync("AP_VNAV_HOLD"); }),
+                        new("&Altitude hold", () => ApStateText(simConnect, "LON_AP_ALT"),
+                            () => { _ = Fms?.SendApCommandAsync("AP_ALT_HOLD"); }),
+                    });
 
             case HotkeyAction.FCUSetHeading:
                 hotkeyManager.ExitInputHotkeyMode();
                 return FcuSetViaCdp("Set Heading Bug", "Heading", "0 to 359",
                     "HEADING_BUG_SET", "degrees", announcer, parentForm,
-                    input => (double.TryParse(input, out double v) && v >= 0 && v <= 359, "Enter a heading 0 to 359"));
+                    input => (double.TryParse(input, out double v) && v >= 0 && v <= 359, "Enter a heading 0 to 359"),
+                    new List<ToggleButtonDef>
+                    {
+                        new("&HDG mode", () => ApStateText(simConnect, "LON_AP_HDG"),
+                            () => { _ = Fms?.SendApCommandAsync("AP_HDG_HOLD"); }),
+                        new("&NAV mode (follow flight plan)", () => ApStateText(simConnect, "LON_AP_NAV"),
+                            () => { _ = Fms?.SendApCommandAsync("AP_NAV1_HOLD"); }),
+                    });
 
             case HotkeyAction.FCUSetSpeed:
                 hotkeyManager.ExitInputHotkeyMode();
                 return FcuSetViaCdp("Set Selected Airspeed", "Airspeed", "80 to 350 knots",
                     "AP_SPD_VAR_SET", "knots", announcer, parentForm,
-                    input => (double.TryParse(input, out double v) && v >= 80 && v <= 350, "Enter 80 to 350 knots"));
+                    input => (double.TryParse(input, out double v) && v >= 80 && v <= 350, "Enter 80 to 350 knots"),
+                    new List<ToggleButtonDef>
+                    {
+                        new("&FLC (speed mode)", () => ApStateText(simConnect, "LON_AP_FLC"),
+                            () => { _ = Fms?.SendApCommandAsync("FLIGHT_LEVEL_CHANGE"); }),
+                    });
 
             case HotkeyAction.FCUSetVS:
                 hotkeyManager.ExitInputHotkeyMode();
                 return FcuSetViaCdp("Set Vertical Speed", "Vertical Speed", "-6000 to 6000 fpm",
                     "AP_VS_VAR_SET_ENGLISH", "feet per minute", announcer, parentForm,
-                    input => (double.TryParse(input, out double v) && v >= -6000 && v <= 6000, "Enter -6000 to 6000 fpm"));
+                    input => (double.TryParse(input, out double v) && v >= -6000 && v <= 6000, "Enter -6000 to 6000 fpm"),
+                    new List<ToggleButtonDef>
+                    {
+                        new("&VS mode", () => ApStateText(simConnect, "LON_AP_VS"),
+                            () => { _ = Fms?.SendApCommandAsync("AP_VS_HOLD"); }),
+                        new("&Altitude hold", () => ApStateText(simConnect, "LON_AP_ALT"),
+                            () => { _ = Fms?.SendApCommandAsync("AP_ALT_HOLD"); }),
+                    });
         }
         return base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager);
     }
 
-    /// <summary>Show an accessible value dialog and send the AP value-set through CDP
-    /// (SimConnect events don't drive the WT autopilot).</summary>
+    private static string ApStateText(SimConnectManager sc, string key)
+        => (sc.GetCachedVariableValue(key) ?? 0) > 0 ? "ON" : "Off";
+
+    /// <summary>Show an accessible value dialog (with optional AP mode toggle buttons)
+    /// and send the value-set through CDP — SimConnect events don't drive the WT
+    /// autopilot. Non-modal so other windows stay accessible (airliner pattern).</summary>
     private bool FcuSetViaCdp(string title, string param, string range, string kEvent, string unit,
-        ScreenReaderAnnouncer announcer, Form parentForm, Func<string, (bool, string)> validator)
+        ScreenReaderAnnouncer announcer, Form parentForm, Func<string, (bool, string)> validator,
+        List<ToggleButtonDef>? toggles = null)
     {
         if (Fms == null)
         {
             announcer.AnnounceImmediate("FMS link not ready. Open the Longitude FMS window once with input mode then Shift M.");
             return true;
         }
-        var dlg = new Forms.ValueInputForm(title, param, range, announcer, validator);
-        if (dlg.ShowDialog(parentForm) == DialogResult.OK && dlg.IsValidInput
-            && double.TryParse(dlg.InputValue.Trim(), out double val))
-        {
-            _ = Fms.SendApCommandAsync(kEvent, val, unit);
-        }
+        var dlg = new ValueInputForm(title, param, range, announcer, validator,
+            toggles ?? new List<ToggleButtonDef>(),
+            input => { if (double.TryParse(input.Trim(), out double val)) _ = Fms.SendApCommandAsync(kEvent, val, unit); });
+        dlg.ShowCancelButton = false;
+        dlg.Show(parentForm);
         return true;
     }
 
