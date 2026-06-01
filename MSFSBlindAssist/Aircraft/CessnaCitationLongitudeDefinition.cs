@@ -1,4 +1,7 @@
 using MSFSBlindAssist.SimConnect;
+using MSFSBlindAssist.Hotkeys;
+using MSFSBlindAssist.Accessibility;
+using System.Windows.Forms;
 
 namespace MSFSBlindAssist.Aircraft;
 
@@ -187,6 +190,55 @@ public sealed class CessnaCitationLongitudeDefinition : BaseAircraftDefinition
             "LON_ENG1_N1", "LON_ENG2_N1", "LON_ENG1_ITT", "LON_ENG2_ITT"
         },
     };
+
+    /// <summary>
+    /// FCU value-setting input hotkeys, matching the airliners:
+    ///   Ctrl+A = altitude, Ctrl+H = heading, Ctrl+S = speed, Ctrl+V = vertical speed.
+    /// All four events verified live to engage on the Longitude's Garmin GFC
+    /// (2026-06-01). NOTE: setting an altitude alone does NOT climb — engage a
+    /// vertical mode (FLC or VS) from the Autopilot Modes panel, and the jet climbs
+    /// to the selected altitude.
+    /// </summary>
+    public override bool HandleHotkeyAction(HotkeyAction action, SimConnectManager simConnect,
+        ScreenReaderAnnouncer announcer, Form parentForm, HotkeyManager hotkeyManager)
+    {
+        switch (action)
+        {
+            case HotkeyAction.FCUSetAltitude:
+                hotkeyManager.ExitInputHotkeyMode();
+                return ShowFCUInputDialog(
+                    "Set Selected Altitude", "Altitude", "0 to 45000 feet",
+                    "AP_ALT_VAR_SET_ENGLISH", simConnect, announcer, parentForm,
+                    input => (double.TryParse(input, out double v) && v >= 0 && v <= 45000,
+                              "Enter 0 to 45000 feet"));
+
+            case HotkeyAction.FCUSetHeading:
+                hotkeyManager.ExitInputHotkeyMode();
+                return ShowFCUInputDialog(
+                    "Set Heading Bug", "Heading", "0 to 359",
+                    "HEADING_BUG_SET", simConnect, announcer, parentForm,
+                    input => (double.TryParse(input, out double v) && v >= 0 && v <= 359,
+                              "Enter a heading 0 to 359"));
+
+            case HotkeyAction.FCUSetSpeed:
+                hotkeyManager.ExitInputHotkeyMode();
+                return ShowFCUInputDialog(
+                    "Set Selected Airspeed", "Airspeed", "80 to 350 knots",
+                    "AP_SPD_VAR_SET", simConnect, announcer, parentForm,
+                    input => (double.TryParse(input, out double v) && v >= 80 && v <= 350,
+                              "Enter 80 to 350 knots"));
+
+            case HotkeyAction.FCUSetVS:
+                hotkeyManager.ExitInputHotkeyMode();
+                return ShowFCUInputDialog(
+                    "Set Vertical Speed", "Vertical Speed", "-6000 to 6000 fpm",
+                    "AP_VS_VAR_SET_ENGLISH", simConnect, announcer, parentForm,
+                    input => (double.TryParse(input, out double v) && v >= -6000 && v <= 6000,
+                              "Enter -6000 to 6000 fpm"),
+                    value => value >= 0 ? (uint)value : (uint)(65536 + value));
+        }
+        return base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager);
+    }
 
     public override Dictionary<string, List<string>> GetPanelDisplayVariables() => new();
 
