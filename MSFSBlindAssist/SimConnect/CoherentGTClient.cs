@@ -88,6 +88,48 @@ public sealed class CoherentGTClient : IDisposable
         CancellationToken ct = default)
         => await EvaluateInternalAsync(expression, awaitPromise: true, timeoutMs, ct);
 
+    /// <summary>
+    /// Run an async JS expression (one that evaluates to a Promise of a string)
+    /// WITHOUT using CDP awaitPromise — the fragile mode that the proven A32NX
+    /// client deliberately avoids. Instead: kick the promise off, store its
+    /// settled value in a per-call window slot, then poll that slot with plain
+    /// (awaitPromise:false) evals until it's set or we time out.
+    ///
+    /// <paramref name="promiseExpr"/> MUST evaluate to a Promise that resolves to
+    /// a string (e.g. an async IIFE returning JSON).
+    /// </summary>
+    public async Task<string?> EvaluateJobAsync(string promiseExpr, int timeoutMs = 15000,
+        CancellationToken ct = default)
+    {
+        int jobId = System.Threading.Interlocked.Increment(ref _nextId);
+        string slot = $"window.__msfsba_job_{jobId}";
+
+        // Kick off: clear slot, run the promise, store result/error string into the slot.
+        // All plain evals (awaitPromise:false) so they never hold the channel open.
+        string kick =
+            $"(function(){{try{{{slot}=undefined;Promise.resolve(({promiseExpr}))" +
+            $".then(function(v){{{slot}=(v===undefined||v===null)?'__null__':String(v);}}," +
+            $"function(e){{{slot}='ERR:'+((e&&e.message)||e);}});return 'started';}}" +
+            $"catch(e){{{slot}='ERR:'+((e&&e.message)||e);return 'kickfail';}}}})()";
+
+        string? kr = await EvaluateAsync(kick, 5000, ct);
+        if (kr == null) return null;
+
+        // Poll the slot
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(250, ct);
+            string? v = await EvaluateAsync($"({slot}===undefined?'__pending__':{slot})", 4000, ct);
+            if (v == null) continue;
+            if (v == "__pending__") continue;
+            // Cleanup the slot, return
+            _ = EvaluateAsync($"try{{delete {slot};}}catch(e){{}};'ok'", 2000, ct);
+            return v == "__null__" ? null : v;
+        }
+        return null; // timed out
+    }
+
     private async Task<string?> EvaluateInternalAsync(string expression, bool awaitPromise,
         int timeoutMs, CancellationToken ct)
     {

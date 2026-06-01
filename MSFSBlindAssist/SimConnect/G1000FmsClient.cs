@@ -203,7 +203,7 @@ public sealed class G1000FmsClient : IDisposable
     public async Task<bool> ActivateVtfAsync()
     {
         string js = $"(async function(){{try{{await {FmsRef}.activateVtf();return 'ok';}}catch(e){{return 'ERR:'+e.message;}}}})()";
-        string? r = await _cgt.EvaluatePromiseAsync(js, 6000);
+        string? r = await _cgt.EvaluateJobAsync(js, 6000);
         return r == "ok";
     }
 
@@ -227,7 +227,7 @@ public sealed class G1000FmsClient : IDisposable
     public async Task<bool> ClearPlanAsync()
     {
         string js = $"(async function(){{try{{await {FmsRef}.emptyPrimaryFlightPlan();return 'ok';}}catch(e){{return 'ERR:'+e.message;}}}})()";
-        string? r = await _cgt.EvaluatePromiseAsync(js, 6000);
+        string? r = await _cgt.EvaluateJobAsync(js, 6000);
         return r == "ok";
     }
 
@@ -244,7 +244,7 @@ public sealed class G1000FmsClient : IDisposable
   fms.setOrigin(f);
   return 'ok';
 }}catch(e){{return 'ERR:'+e.message;}}}})()";
-        string? r = await _cgt.EvaluatePromiseAsync(js, 12000);
+        string? r = await _cgt.EvaluateJobAsync(js, 12000);
         return r == "ok";
     }
 
@@ -261,7 +261,7 @@ public sealed class G1000FmsClient : IDisposable
   fms.setDestination(f);
   return 'ok';
 }}catch(e){{return 'ERR:'+e.message;}}}})()";
-        string? r = await _cgt.EvaluatePromiseAsync(js, 12000);
+        string? r = await _cgt.EvaluateJobAsync(js, 12000);
         return r == "ok";
     }
 
@@ -279,18 +279,27 @@ public sealed class G1000FmsClient : IDisposable
         // lat/lon in radians. Falls back to plain searchByIdent if nearest fails.
         string js = $@"(async function(){{try{{
   var fms={FmsRef}; var fp=fms.getPrimaryFlightPlan();
-  var lat=SimVar.GetSimVarValue('PLANE LATITUDE','radians');
-  var lon=SimVar.GetSimVarValue('PLANE LONGITUDE','radians');
-  var res=null;
-  try{{ res=await fms.facLoader.findNearestFacilitiesByIdent(msfssdk.FacilitySearchType.AllExceptVisual,'{ident}',lat,lon,20); }}catch(e){{}}
-  if(!res||res.length===0){{ res=await fms.facLoader.searchByIdent(msfssdk.FacilitySearchType.All,'{ident}',20); }}
-  if(!res||res.length===0) return 'ERR:not found';
-  var typeFor=function(icao){{var c=icao.charAt(0);
+  // findNearestFacilitiesByIdent wants lat/lon in DEGREES (verified live:
+  // radians returned an Italian LAM, degrees returned London LAMBOURNE).
+  var lat=SimVar.GetSimVarValue('PLANE LATITUDE','degrees');
+  var lon=SimVar.GetSimVarValue('PLANE LONGITUDE','degrees');
+  // findNearestFacilitiesByIdent returns FACILITY OBJECTS (with .icao/.name),
+  // sorted nearest-first. searchByIdent returns ICAO STRINGS. Normalise to an
+  // icao string either way, then load.
+  var icao=null;
+  try{{
+    var near=await fms.facLoader.findNearestFacilitiesByIdent(msfssdk.FacilitySearchType.AllExceptVisual,'{ident}',lat,lon,20);
+    if(near&&near.length>0) icao=(typeof near[0]==='string')?near[0]:near[0].icao;
+  }}catch(e){{}}
+  if(!icao){{
+    var res=await fms.facLoader.searchByIdent(msfssdk.FacilitySearchType.All,'{ident}',20);
+    if(res&&res.length>0) icao=(typeof res[0]==='string')?res[0]:res[0].icao;
+  }}
+  if(!icao) return 'ERR:not found';
+  var typeFor=function(ic){{var c=ic.charAt(0);
     return c==='A'?msfssdk.FacilityType.Airport:c==='V'?msfssdk.FacilityType.VOR:
            c==='N'?msfssdk.FacilityType.NDB:msfssdk.FacilityType.Intersection;}};
-  // res[0] is nearest (findNearest sorts by distance). Prefer an exact navaid match if close.
-  var pick=res[0];
-  var fac=await fms.facLoader.getFacility(typeFor(pick),pick);
+  var fac=await fms.facLoader.getFacility(typeFor(icao),icao);
   if(!fac) return 'ERR:load failed';
   var seg, legIdx;
   if({flatIndex}<0){{
@@ -307,7 +316,7 @@ public sealed class G1000FmsClient : IDisposable
 }}catch(e){{return 'ERR:'+e.message;}}}})()";
         return await RunOperationAsync(async () =>
         {
-            string? r = await _cgt.EvaluatePromiseAsync(js, 12000);
+            string? r = await _cgt.EvaluateJobAsync(js, 12000);
             return r != null && r.StartsWith("ok");
         });
     }
@@ -487,7 +496,7 @@ return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1
 }})()";
         return await RunOperationAsync<G1000FacilityData?>(async () =>
         {
-            string? r = await _cgt.EvaluatePromiseAsync(js, 15000);
+            string? r = await _cgt.EvaluateJobAsync(js, 15000);
             if (r == null) return null;
             try
             {
@@ -514,7 +523,7 @@ return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1
 }})()";
         return await RunOperationAsync(async () =>
         {
-            string? r = await _cgt.EvaluatePromiseAsync(js, 12000);
+            string? r = await _cgt.EvaluateJobAsync(js, 12000);
             return r == "ok";
         });
     }
