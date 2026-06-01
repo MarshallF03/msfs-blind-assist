@@ -255,31 +255,36 @@ public sealed class G1000FmsClient : IDisposable
     public async Task<bool> InsertWaypointAsync(string ident, int flatIndex)
     {
         ident = ident.ToUpperInvariant().Replace("'", "").Trim();
+        // CORRECT search (verified live 2026-05-31):
+        //   searchByIdent(filter, ident, maxItems) where filter is a FacilitySearchType
+        //   NUMBER (All=0), NOT a FacilityType. Returns ICAO strings; the first char
+        //   gives the type (A=airport V=VOR N=NDB W=intersection) for getFacility.
         string js = $@"(async function(){{try{{
   var fms={FmsRef}; var fp=fms.getPrimaryFlightPlan();
-  // Resolve the facility by ident — try intersection, VOR, NDB, then airport
-  var fac=null;
-  var tryTypes=[msfssdk.FacilityType.Intersection,msfssdk.FacilityType.VOR,msfssdk.FacilityType.NDB,msfssdk.FacilityType.Airport];
-  for(var t=0;t<tryTypes.length && !fac;t++){{
-    try{{
-      var res=await fms.facLoader.searchByIdent(tryTypes[t],'{ident}',1);
-      if(res&&res.length>0){{ fac=await fms.facLoader.getFacility(tryTypes[t],res[0]); }}
-    }}catch(e){{}}
-  }}
-  if(!fac) return 'ERR:waypoint not found';
+  var res=await fms.facLoader.searchByIdent(msfssdk.FacilitySearchType.All,'{ident}',10);
+  if(!res||res.length===0) return 'ERR:not found';
+  var typeFor=function(icao){{var c=icao.charAt(0);
+    return c==='A'?msfssdk.FacilityType.Airport:c==='V'?msfssdk.FacilityType.VOR:
+           c==='N'?msfssdk.FacilityType.NDB:msfssdk.FacilityType.Intersection;}};
+  // Prefer an exact ident match; navaids (V/N) before fixes when ambiguous
+  var pick=res[0];
+  for(var i=0;i<res.length;i++){{ var t=res[i].replace(/^[A-Z]\s+/,'').replace(/\x00/g,'').trim();
+    if(t.indexOf('{ident}')===0 && (res[i].charAt(0)==='V'||res[i].charAt(0)==='N')){{pick=res[i];break;}} }}
+  var fac=await fms.facLoader.getFacility(typeFor(pick),pick);
+  if(!fac) return 'ERR:load failed';
   var seg, legIdx;
   if({flatIndex}<0){{
-    seg=fms.findLastEnrouteSegmentIndex?fms.findLastEnrouteSegmentIndex(fp):fp.getSegmentIndex(fp.length-1);
-    legIdx=undefined; // append
+    seg=fp.getSegmentIndex(fp.length-1);
+    legIdx=undefined;
   }}else{{
     seg=fp.getSegmentIndex({flatIndex});
     legIdx=fp.getSegmentLegIndex({flatIndex});
   }}
   fms.insertWaypoint(seg, fac, legIdx);
-  return 'ok';
+  return 'ok:'+(fac.name||pick);
 }}catch(e){{return 'ERR:'+e.message;}}}})()";
         string? r = await _cgt.EvaluatePromiseAsync(js, 12000);
-        return r == "ok";
+        return r != null && r.StartsWith("ok");
     }
 
     /// <summary>Toggle GPS DRIVES NAV1. Returns new state (true=on).</summary>
