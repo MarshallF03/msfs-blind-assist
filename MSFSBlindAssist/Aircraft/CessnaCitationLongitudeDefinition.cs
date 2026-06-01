@@ -52,6 +52,21 @@ public sealed class CessnaCitationLongitudeDefinition : BaseAircraftDefinition
         UpdateFrequency = UpdateFrequency.OnRequest
     };
 
+    // Continuously cached (so the output readout hotkeys can read instantly).
+    // Auto-announcement is suppressed in ProcessSimVarUpdate — we only speak on demand.
+    private static SimVarDefinition Cached(string name, string display, string units) => new()
+    {
+        Name = name, DisplayName = display, Type = SimVarType.SimVar, Units = units,
+        UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true
+    };
+
+    // Keys whose continuous updates we cache but never auto-announce.
+    private static readonly HashSet<string> SuppressedKeys = new()
+    {
+        "LON_AP_ALT_STATE", "LON_AP_HDG_STATE", "LON_AP_VS_STATE", "LON_AP_SPD_STATE",
+        "LON_FUEL_FLOW1", "LON_FUEL_FLOW2", "LON_FUEL_TOTAL_LBS"
+    };
+
     public override Dictionary<string, SimVarDefinition> GetVariables()
     {
         var v = GetBaseVariables();
@@ -72,13 +87,13 @@ public sealed class CessnaCitationLongitudeDefinition : BaseAircraftDefinition
         v["LON_AP_FLC_BTN"]  = Evt("FLIGHT_LEVEL_CHANGE", "Flight level change / speed mode", button: true);
         v["LON_AP_VNAV_BTN"] = Evt("AP_VNAV_HOLD", "VNAV mode", button: true);
 
-        v["LON_AP_ALT_STATE"] = Display("AUTOPILOT ALTITUDE LOCK VAR", "Selected Altitude", "feet");
+        v["LON_AP_ALT_STATE"] = Cached("AUTOPILOT ALTITUDE LOCK VAR", "Selected Altitude", "feet");
         v["LON_AP_ALT_SET"]   = Evt("AP_ALT_VAR_SET_ENGLISH", "Set Selected Altitude", help: "Enter altitude in feet");
-        v["LON_AP_HDG_STATE"] = Display("AUTOPILOT HEADING LOCK DIR", "Selected Heading", "degrees");
+        v["LON_AP_HDG_STATE"] = Cached("AUTOPILOT HEADING LOCK DIR", "Selected Heading", "degrees");
         v["LON_AP_HDG_SET"]   = Evt("HEADING_BUG_SET", "Set Selected Heading", help: "Enter heading 0 to 359");
-        v["LON_AP_VS_STATE"]  = Display("AUTOPILOT VERTICAL HOLD VAR", "Selected Vertical Speed", "feet/minute");
+        v["LON_AP_VS_STATE"]  = Cached("AUTOPILOT VERTICAL HOLD VAR", "Selected Vertical Speed", "feet/minute");
         v["LON_AP_VS_SET"]    = Evt("AP_VS_VAR_SET_ENGLISH", "Set Vertical Speed", help: "Enter feet per minute (negative for descent)");
-        v["LON_AP_SPD_STATE"] = Display("AUTOPILOT AIRSPEED HOLD VAR", "Selected Airspeed", "knots");
+        v["LON_AP_SPD_STATE"] = Cached("AUTOPILOT AIRSPEED HOLD VAR", "Selected Airspeed", "knots");
         v["LON_AP_SPD_SET"]   = Evt("AP_SPD_VAR_SET", "Set Selected Airspeed", help: "Enter knots");
 
         // ===== EXTERIOR LIGHTS =====
@@ -119,8 +134,10 @@ public sealed class CessnaCitationLongitudeDefinition : BaseAircraftDefinition
         v["LON_BATTERY_TOGGLE"] = Evt("TOGGLE_MASTER_BATTERY", "Battery Master Toggle");
 
         // ===== FUEL =====
-        v["LON_FUEL_TOTAL"] = Display("FUEL TOTAL QUANTITY", "Total Fuel", "gallons");
-        v["LON_FUEL_LBS"]   = Display("FUEL TOTAL QUANTITY WEIGHT", "Total Fuel Weight", "pounds");
+        v["LON_FUEL_TOTAL"]     = Display("FUEL TOTAL QUANTITY", "Total Fuel", "gallons");
+        v["LON_FUEL_TOTAL_LBS"] = Cached("FUEL TOTAL QUANTITY WEIGHT", "Total Fuel Weight", "pounds");
+        v["LON_FUEL_FLOW1"]     = Cached("ENG FUEL FLOW PPH:1", "Engine 1 Fuel Flow", "pounds per hour");
+        v["LON_FUEL_FLOW2"]     = Cached("ENG FUEL FLOW PPH:2", "Engine 2 Fuel Flow", "pounds per hour");
 
         // ===== ENGINES =====
         v["LON_ENG1_N1"] = Display("TURB ENG N1:1", "Engine 1 N1", "percent");
@@ -183,7 +200,7 @@ public sealed class CessnaCitationLongitudeDefinition : BaseAircraftDefinition
         },
         ["Fuel"] = new List<string>
         {
-            "LON_FUEL_TOTAL", "LON_FUEL_LBS"
+            "LON_FUEL_TOTAL", "LON_FUEL_TOTAL_LBS", "LON_FUEL_FLOW1", "LON_FUEL_FLOW2"
         },
         ["Engines"] = new List<string>
         {
@@ -204,6 +221,39 @@ public sealed class CessnaCitationLongitudeDefinition : BaseAircraftDefinition
     {
         switch (action)
         {
+            // ── Output readouts (Shift+A/S/H/V + fuel) — read the SELECTED AP values ──
+            case HotkeyAction.ReadAltitude:
+                AnnounceCached(simConnect, announcer, "LON_AP_ALT_STATE", "Selected altitude", "feet", 0);
+                return true;
+            case HotkeyAction.ReadHeading:
+                AnnounceCached(simConnect, announcer, "LON_AP_HDG_STATE", "Selected heading", "degrees", 0);
+                return true;
+            case HotkeyAction.ReadSpeed:
+                AnnounceCached(simConnect, announcer, "LON_AP_SPD_STATE", "Selected airspeed", "knots", 0);
+                return true;
+            case HotkeyAction.ReadFCUVerticalSpeedFPA:
+                AnnounceCached(simConnect, announcer, "LON_AP_VS_STATE", "Selected vertical speed", "feet per minute", 0);
+                return true;
+
+            case HotkeyAction.ReadFuelQuantity:
+            case HotkeyAction.ReadFuelInfo:
+            {
+                double? lbs   = simConnect.GetCachedVariableValue("LON_FUEL_TOTAL_LBS");
+                double? flow1 = simConnect.GetCachedVariableValue("LON_FUEL_FLOW1");
+                double? flow2 = simConnect.GetCachedVariableValue("LON_FUEL_FLOW2");
+                var parts = new List<string>();
+                if (lbs.HasValue) parts.Add($"Total fuel {lbs.Value:F0} pounds");
+                if (flow1.HasValue && flow2.HasValue)
+                {
+                    double total = flow1.Value + flow2.Value;
+                    parts.Add($"fuel flow {flow1.Value:F0} and {flow2.Value:F0}, total {total:F0} pounds per hour");
+                    if (lbs.HasValue && total > 1.0)
+                        parts.Add($"endurance {lbs.Value / total:F1} hours");
+                }
+                announcer.AnnounceImmediate(parts.Count > 0 ? string.Join(", ", parts) : "Fuel data not available yet");
+                return true;
+            }
+
             case HotkeyAction.FCUSetAltitude:
                 hotkeyManager.ExitInputHotkeyMode();
                 return ShowFCUInputDialog(
@@ -238,6 +288,27 @@ public sealed class CessnaCitationLongitudeDefinition : BaseAircraftDefinition
                     value => value >= 0 ? (uint)value : (uint)(65536 + value));
         }
         return base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager);
+    }
+
+    private static void AnnounceCached(SimConnectManager simConnect, ScreenReaderAnnouncer announcer,
+        string key, string label, string units, int decimals)
+    {
+        double? v = simConnect.GetCachedVariableValue(key);
+        if (v.HasValue)
+            announcer.AnnounceImmediate($"{label} {v.Value.ToString("F" + decimals)} {units}");
+        else
+        {
+            simConnect.RequestVariable(key);
+            announcer.AnnounceImmediate($"{label} not available yet");
+        }
+    }
+
+    /// <summary>Suppress auto-announcement of the continuously-cached readout variables —
+    /// they exist only so the output hotkeys can read them instantly, on demand.</summary>
+    public override bool ProcessSimVarUpdate(string varName, double value, ScreenReaderAnnouncer announcer)
+    {
+        if (SuppressedKeys.Contains(varName)) return true;
+        return base.ProcessSimVarUpdate(varName, value, announcer);
     }
 
     public override Dictionary<string, List<string>> GetPanelDisplayVariables() => new();
