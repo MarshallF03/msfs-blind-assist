@@ -29,6 +29,13 @@ public sealed class CoherentGTClient : IDisposable
     private Task? _receiveTask;
     private bool _disposed;
 
+    // ClientWebSocket.SendAsync is NOT safe for concurrent calls. The 2-second
+    // state poll (timer thread) and user actions (UI thread) both send evals on
+    // this one socket — without serialization they corrupt frames / abort the
+    // connection, which is why inserts failed under live polling but worked solo.
+    // This semaphore makes every eval send-and-await atomic.
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
+
     public bool IsConnected => _ws?.State == WebSocketState.Open;
     public string? ConnectedTargetTitle { get; private set; }
     public int ConnectedPort { get; private set; }
@@ -94,6 +101,10 @@ public sealed class CoherentGTClient : IDisposable
         string awaitPart   = awaitPromise ? ",\"awaitPromise\":true" : "";
         string msg = $"{{\"id\":{id},\"method\":\"Runtime.evaluate\",\"params\":{{\"expression\":{escapedExpr},\"returnByValue\":true,\"generatePreview\":false{awaitPart}}}}}";
 
+        // Serialize the SEND only — frames must not interleave on the socket.
+        // The response is matched by id in the receive loop, so multiple evals
+        // can still be awaited concurrently after their sends complete.
+        await _sendLock.WaitAsync(ct);
         try
         {
             var bytes = Encoding.UTF8.GetBytes(msg);
@@ -104,6 +115,10 @@ public sealed class CoherentGTClient : IDisposable
             _pending.TryRemove(id, out _);
             System.Diagnostics.Debug.WriteLine($"[CoherentGT] send failed: {ex.Message}");
             return null;
+        }
+        finally
+        {
+            _sendLock.Release();
         }
 
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _cts.Token);
