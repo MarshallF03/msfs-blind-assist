@@ -94,36 +94,191 @@ public sealed class G1000FmsClient : IDisposable
     // FMS operations
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Activate a specific leg index (go direct in FMS).</summary>
-    public async Task<bool> ActivateLegAsync(int index)
-    {
-        string js = $"(function(){{document.querySelector('wtg1000-mfd').fms.activateLeg(0,{index});return 'ok';}})()";
-        string? r = await _cgt.EvaluateAsync(js);
-        return r == "ok";
-    }
+    // NOTE on signatures (verified live 2026-05-31 against the installed NXi):
+    //   activateLeg(segmentIndex, segmentLegIndex, planIndex?, inhibitImmediateSequence?)
+    //   createDirectToExisting(segmentIndex, segmentLegIndex, course?, deletePriorConstraints?)
+    //   createDirectToRandom(target, course?)
+    //   insertApproach(facility, approachIndex, approachTransitionIndex, visRwyNum?, visRwyDes?, skipCourseReversal?, activate?)
+    //   insertDeparture(facility, departureIndex, departureRunwayIndex, enrouteTransitionIndex, oneWayRunway?)
+    //   insertArrival(facility, arrivalIndex, arrivalRunwayTransitionIndex, enrouteTransitionIndex, arrivalRunway?)
+    //   setUserConstraint(segmentIndex, segmentLegIndex, altitudeFeet, displayAsFlightLevel?)
+    //   removeWaypoint(segmentIndex, segmentLegIndex)
+    // Flat leg index -> segment addressing via fp.getSegmentIndex(i) / fp.getSegmentLegIndex(i).
+
+    private const string FmsRef = "document.querySelector('wtg1000-mfd').fms";
 
     /// <summary>
-    /// Direct-to an existing FPL leg by its segment indices. Works backwards AND forwards.
-    /// Preferred over createDirectToRandom for FPL waypoints — more reliable because
-    /// the FMS already has the waypoint data loaded.
+    /// Direct-to an existing FPL leg by flat leg index. Converts to segment
+    /// addressing inside JS via getSegmentIndex/getSegmentLegIndex.
+    /// Works backwards AND forwards. THIS is the reliable direct-to.
     /// </summary>
-    public async Task<bool> DirectToExistingAsync(int segIdx, int segLegIdx)
+    public async Task<bool> DirectToLegIndexAsync(int flatIndex)
     {
         string js = $@"(function(){{try{{
-  var el=document.querySelector('wtg1000-mfd');
-  el.fms.createDirectToExisting(0,{segIdx},{segLegIdx});
+  var fms={FmsRef}; var fp=fms.getPrimaryFlightPlan();
+  var seg=fp.getSegmentIndex({flatIndex}), segLeg=fp.getSegmentLegIndex({flatIndex});
+  if(seg<0||segLeg<0) return 'ERR:bad index';
+  fms.createDirectToExisting(seg, segLeg);
   return 'ok';
 }}catch(e){{return 'ERR:'+e.message;}}}})()";
         string? r = await _cgt.EvaluateAsync(js, 3000);
         return r == "ok";
     }
 
-    /// <summary>Direct-to any waypoint by ident (no visual dialog).</summary>
+    /// <summary>Activate an existing leg by flat index (resume FPL nav to that leg).</summary>
+    public async Task<bool> ActivateLegIndexAsync(int flatIndex)
+    {
+        string js = $@"(function(){{try{{
+  var fms={FmsRef}; var fp=fms.getPrimaryFlightPlan();
+  var seg=fp.getSegmentIndex({flatIndex}), segLeg=fp.getSegmentLegIndex({flatIndex});
+  if(seg<0||segLeg<0) return 'ERR:bad index';
+  fms.activateLeg(seg, segLeg);
+  return 'ok';
+}}catch(e){{return 'ERR:'+e.message;}}}})()";
+        string? r = await _cgt.EvaluateAsync(js, 3000);
+        return r == "ok";
+    }
+
+    /// <summary>Remove a waypoint by flat leg index.</summary>
+    public async Task<bool> RemoveWaypointAsync(int flatIndex)
+    {
+        string js = $@"(function(){{try{{
+  var fms={FmsRef}; var fp=fms.getPrimaryFlightPlan();
+  var seg=fp.getSegmentIndex({flatIndex}), segLeg=fp.getSegmentLegIndex({flatIndex});
+  if(seg<0||segLeg<0) return 'ERR:bad index';
+  fms.removeWaypoint(seg, segLeg);
+  return 'ok';
+}}catch(e){{return 'ERR:'+e.message;}}}})()";
+        string? r = await _cgt.EvaluateAsync(js, 3000);
+        return r == "ok";
+    }
+
+    /// <summary>
+    /// Set (or change) an altitude constraint on a leg, in feet.
+    /// Pass altFeet = 0 to revert the constraint instead.
+    /// </summary>
+    public async Task<bool> SetAltitudeConstraintAsync(int flatIndex, int altFeet)
+    {
+        string js = $@"(function(){{try{{
+  var fms={FmsRef}; var fp=fms.getPrimaryFlightPlan();
+  var seg=fp.getSegmentIndex({flatIndex}), segLeg=fp.getSegmentLegIndex({flatIndex});
+  if(seg<0||segLeg<0) return 'ERR:bad index';
+  {(altFeet <= 0
+      ? "fms.revertAltitudeConstraint(seg, segLeg);"
+      : $"fms.setUserConstraint(seg, segLeg, {altFeet}, false);")}
+  return 'ok';
+}}catch(e){{return 'ERR:'+e.message;}}}})()";
+        string? r = await _cgt.EvaluateAsync(js, 3000);
+        return r == "ok";
+    }
+
+    /// <summary>Direct-to any waypoint by ident (manual entry; off-route fix allowed).</summary>
     public async Task<bool> DirectToAsync(string ident)
     {
         ident = ident.ToUpperInvariant().Replace("'", "").Trim();
-        string js = $"(function(){{document.querySelector('wtg1000-mfd').fms.createDirectToRandom('{ident}');return 'ok';}})()";
+        string js = $"(function(){{try{{{FmsRef}.createDirectToRandom('{ident}');return 'ok';}}catch(e){{return 'ERR:'+e.message;}}}})()";
         string? r = await _cgt.EvaluateAsync(js);
+        return r == "ok";
+    }
+
+    /// <summary>Vectors to final — activate the approach in VTF mode.</summary>
+    public async Task<bool> ActivateVtfAsync()
+    {
+        string js = $"(async function(){{try{{await {FmsRef}.activateVtf();return 'ok';}}catch(e){{return 'ERR:'+e.message;}}}})()";
+        string? r = await _cgt.EvaluatePromiseAsync(js, 6000);
+        return r == "ok";
+    }
+
+    /// <summary>Activate the missed approach procedure.</summary>
+    public async Task<bool> ActivateMissedApproachAsync()
+    {
+        string js = $"(function(){{try{{{FmsRef}.activateMissedApproach();return 'ok';}}catch(e){{return 'ERR:'+e.message;}}}})()";
+        string? r = await _cgt.EvaluateAsync(js);
+        return r == "ok";
+    }
+
+    /// <summary>Invert the flight plan (reverse origin/destination and all legs).</summary>
+    public async Task<bool> InvertPlanAsync()
+    {
+        string js = $"(function(){{try{{{FmsRef}.invertFlightplan();return 'ok';}}catch(e){{return 'ERR:'+e.message;}}}})()";
+        string? r = await _cgt.EvaluateAsync(js, 4000);
+        return r == "ok";
+    }
+
+    /// <summary>Empty the entire primary flight plan.</summary>
+    public async Task<bool> ClearPlanAsync()
+    {
+        string js = $"(async function(){{try{{await {FmsRef}.emptyPrimaryFlightPlan();return 'ok';}}catch(e){{return 'ERR:'+e.message;}}}})()";
+        string? r = await _cgt.EvaluatePromiseAsync(js, 6000);
+        return r == "ok";
+    }
+
+    /// <summary>Set origin airport by ICAO (builds/extends the plan).</summary>
+    public async Task<bool> SetOriginAsync(string icao)
+    {
+        icao = icao.ToUpperInvariant().Trim();
+        string js = $@"(async function(){{try{{
+  var fms={FmsRef}; var FT=msfssdk.FacilityType.Airport;
+  var f=null;
+  try{{f=await fms.facLoader.getFacility(FT,'A      {icao} ');}}catch(e){{}}
+  if(!f) f=await fms.facLoader.getFacility(FT,'{icao}');
+  if(!f) return 'ERR:not found';
+  fms.setOrigin(f);
+  return 'ok';
+}}catch(e){{return 'ERR:'+e.message;}}}})()";
+        string? r = await _cgt.EvaluatePromiseAsync(js, 12000);
+        return r == "ok";
+    }
+
+    /// <summary>Set destination airport by ICAO.</summary>
+    public async Task<bool> SetDestinationAsync(string icao)
+    {
+        icao = icao.ToUpperInvariant().Trim();
+        string js = $@"(async function(){{try{{
+  var fms={FmsRef}; var FT=msfssdk.FacilityType.Airport;
+  var f=null;
+  try{{f=await fms.facLoader.getFacility(FT,'A      {icao} ');}}catch(e){{}}
+  if(!f) f=await fms.facLoader.getFacility(FT,'{icao}');
+  if(!f) return 'ERR:not found';
+  fms.setDestination(f);
+  return 'ok';
+}}catch(e){{return 'ERR:'+e.message;}}}})()";
+        string? r = await _cgt.EvaluatePromiseAsync(js, 12000);
+        return r == "ok";
+    }
+
+    /// <summary>
+    /// Insert an enroute waypoint by ICAO/ident before the given flat leg index.
+    /// Loads the facility (intersection/VOR/NDB/airport) then inserts into the
+    /// enroute segment. Pass flatIndex = -1 to append at the end of enroute.
+    /// </summary>
+    public async Task<bool> InsertWaypointAsync(string ident, int flatIndex)
+    {
+        ident = ident.ToUpperInvariant().Replace("'", "").Trim();
+        string js = $@"(async function(){{try{{
+  var fms={FmsRef}; var fp=fms.getPrimaryFlightPlan();
+  // Resolve the facility by ident — try intersection, VOR, NDB, then airport
+  var fac=null;
+  var tryTypes=[msfssdk.FacilityType.Intersection,msfssdk.FacilityType.VOR,msfssdk.FacilityType.NDB,msfssdk.FacilityType.Airport];
+  for(var t=0;t<tryTypes.length && !fac;t++){{
+    try{{
+      var res=await fms.facLoader.searchByIdent(tryTypes[t],'{ident}',1);
+      if(res&&res.length>0){{ fac=await fms.facLoader.getFacility(tryTypes[t],res[0]); }}
+    }}catch(e){{}}
+  }}
+  if(!fac) return 'ERR:waypoint not found';
+  var seg, legIdx;
+  if({flatIndex}<0){{
+    seg=fms.findLastEnrouteSegmentIndex?fms.findLastEnrouteSegmentIndex(fp):fp.getSegmentIndex(fp.length-1);
+    legIdx=undefined; // append
+  }}else{{
+    seg=fp.getSegmentIndex({flatIndex});
+    legIdx=fp.getSegmentLegIndex({flatIndex});
+  }}
+  fms.insertWaypoint(seg, fac, legIdx);
+  return 'ok';
+}}catch(e){{return 'ERR:'+e.message;}}}})()";
+        string? r = await _cgt.EvaluatePromiseAsync(js, 12000);
         return r == "ok";
     }
 
@@ -139,18 +294,12 @@ public sealed class G1000FmsClient : IDisposable
     /// One-button "Follow GPS flight plan" — the key IFR action.
     /// Ensures GPS drives NAV1, turns off HDG mode, engages NAV mode.
     /// Smart: reads current state first, only changes what needs changing.
-    /// Returns a status string for announcement.
     /// </summary>
     public async Task<string> FollowGpsPlanAsync()
     {
-        // Read current state
         const string readJs = @"(function(){var sv=SimVar.GetSimVarValue;
-return JSON.stringify({
-  gps: sv('GPS DRIVES NAV1','bool')>0,
-  nav: sv('AUTOPILOT NAV1 LOCK','bool')>0,
-  hdg: sv('AUTOPILOT HEADING LOCK','bool')>0,
-  ap:  sv('AUTOPILOT MASTER','bool')>0
-});})()";
+return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1 LOCK','bool')>0,
+hdg:sv('AUTOPILOT HEADING LOCK','bool')>0,ap:sv('AUTOPILOT MASTER','bool')>0});})()";
         string? stateJson = await _cgt.EvaluateAsync(readJs, 3000);
         if (stateJson == null) return "Could not read autopilot state";
 
@@ -166,98 +315,79 @@ return JSON.stringify({
         }
         catch { return "Could not parse autopilot state"; }
 
-        if (!ap) return "Autopilot master is OFF — engage it first (AP button on KAP140 panel)";
+        if (!ap) return "Autopilot master is OFF — engage it first.";
 
         var actions = new System.Collections.Generic.List<string>();
-
-        // Step 1: GPS drives NAV1 must be ON — toggle only if currently off
         if (!gps)
         {
             await _cgt.EvaluateAsync("SimVar.SetSimVarValue('K:TOGGLE_GPS_DRIVES_NAV1','number',0);'ok'", 2000);
             await Task.Delay(300);
-            actions.Add("GPS → NAV1 ON");
+            actions.Add("GPS to NAV1 on");
         }
-
-        // Step 2: Turn off HDG mode if on (KAP140 won't enter NAV while HDG is active)
         if (hdg)
         {
             await _cgt.EvaluateAsync("SimVar.SetSimVarValue('K:AP_PANEL_HEADING_HOLD','number',0);'ok'", 2000);
             await Task.Delay(500);
-            actions.Add("HDG mode OFF");
+            actions.Add("HDG off");
         }
-
-        // Step 3: Engage NAV mode — retry up to 3 times with increasing delays
-        // Uses AP_PANEL_NAV1_HOLD (consistent with AP_PANEL_HEADING_HOLD for HDG)
         if (!nav)
         {
             bool navEngaged = false;
             for (int attempt = 0; attempt < 3 && !navEngaged; attempt++)
             {
-                // AP_NAV1_HOLD is confirmed working; AP_PANEL_NAV1_HOLD does nothing on C172 KAP140
                 await _cgt.EvaluateAsync("SimVar.SetSimVarValue('K:AP_NAV1_HOLD','number',0);'ok'", 2000);
                 await Task.Delay(500 + attempt * 300);
-                string? check = await _cgt.EvaluateAsync(
-                    "SimVar.GetSimVarValue('AUTOPILOT NAV1 LOCK','bool')>0?'1':'0'", 1500);
+                string? check = await _cgt.EvaluateAsync("SimVar.GetSimVarValue('AUTOPILOT NAV1 LOCK','bool')>0?'1':'0'", 1500);
                 navEngaged = check == "1";
             }
-            actions.Add(navEngaged ? "NAV mode ON" : "NAV mode (sent — check KAP140 panel)");
+            actions.Add(navEngaged ? "NAV mode on" : "NAV mode sent — check panel");
         }
 
-        // Verify final state
         string? finalJson = await _cgt.EvaluateAsync(@"(function(){var sv=SimVar.GetSimVarValue;
 return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1 LOCK','bool')>0});})()");
-        bool finalGps = false, finalNav = false;
+        bool fGps = false, fNav = false;
         try
         {
             using var doc = System.Text.Json.JsonDocument.Parse(finalJson ?? "{}");
-            finalGps = doc.RootElement.TryGetProperty("gps", out var fg) && fg.GetBoolean();
-            finalNav = doc.RootElement.TryGetProperty("nav", out var fn) && fn.GetBoolean();
+            fGps = doc.RootElement.TryGetProperty("gps", out var fg) && fg.GetBoolean();
+            fNav = doc.RootElement.TryGetProperty("nav", out var fn) && fn.GetBoolean();
         }
         catch { }
 
-        if (finalGps && finalNav)
-            return actions.Count > 0
-                ? $"Following GPS plan. {string.Join(", ", actions)}."
-                : "Already following GPS plan.";
-
-        // Build helpful message about what's missing
+        if (fGps && fNav)
+            return actions.Count > 0 ? $"Following GPS plan. {string.Join(", ", actions)}." : "Already following GPS plan.";
         var missing = new System.Collections.Generic.List<string>();
-        if (!finalGps) missing.Add("GPS→NAV1 still off — press GPS→NAV1 toggle button");
-        if (!finalNav) missing.Add("KAP140 NAV not engaged — press NAV button in the autopilot panel");
+        if (!fGps) missing.Add("GPS to NAV1 still off");
+        if (!fNav) missing.Add("NAV mode not engaged — press NAV in autopilot panel");
         return string.Join(". ", missing) + ".";
     }
 
     /// <summary>
     /// Load an airport's procedures (SIDs/STARs/approaches) from the FMS.
-    /// Returns null if the airport wasn't found or on timeout.
-    /// The facility object is cached in the G1000 page under window._msfsba_fac_dep
-    /// or _arr for subsequent insert calls.
+    /// Caches the facility in window._msfsba_fac_{slot} for subsequent insert calls.
     /// </summary>
     public async Task<G1000FacilityData?> LoadAirportAsync(string icao, string slot)
     {
         icao = icao.ToUpperInvariant().Trim();
-        string paddedIcao = $"A      {icao} ";
-
         string js = $@"(async function(){{
   try {{
-    var el=document.querySelector('wtg1000-mfd');
+    var fms={FmsRef};
     var ft=msfssdk.FacilityType.Airport;
     var fac=null;
-    try{{ fac=await el.fms.facLoader.getFacility(ft,'{paddedIcao}'); }}catch(e){{}}
-    if(!fac) fac=await el.fms.facLoader.getFacility(ft,'{icao}');
+    try{{ fac=await fms.facLoader.getFacility(ft,'A      {icao} '); }}catch(e){{}}
+    if(!fac) fac=await fms.facLoader.getFacility(ft,'{icao}');
     if(!fac) return JSON.stringify({{ok:false,err:'not found'}});
     window['_msfsba_fac_{slot}']=fac;
-    var stripIcao=function(s){{return (s||'').trim().replace(/\x00/g,'').replace(/^[AVWNRU]\s+/,'').trim().substring(0,4);}};
+    var strip=function(s){{return (s||'').trim().replace(/\x00/g,'').replace(/^[AVWNRU]\s+/,'').trim().substring(0,4);}};
     var mapProc=function(arr){{return (arr||[]).map(function(p,i){{
       var trans=(p.enRouteTransitions||p.transitions||[]).map(function(t,j){{return {{i:j,name:t.name||('Trans '+j)}}}});
       var rwys=(p.runwayTransitions||[]).map(function(r,j){{return {{i:j,name:r.runwayDesignation||r.name||('Rwy '+j)}}}});
       return {{i:i,name:p.name||('#'+i),transitions:trans,runways:rwys}};
     }});}};
-    return JSON.stringify({{ok:true,ident:stripIcao(fac.icao),name:fac.name||'{icao}',slot:'{slot}',
+    return JSON.stringify({{ok:true,ident:strip(fac.icao),name:fac.name||'{icao}',slot:'{slot}',
       departures:mapProc(fac.departures),arrivals:mapProc(fac.arrivals),approaches:mapProc(fac.approaches)}});
   }}catch(e){{return JSON.stringify({{ok:false,err:e.message}});}}
 }})()";
-
         string? r = await _cgt.EvaluatePromiseAsync(js, 15000);
         if (r == null) return null;
         try
@@ -270,15 +400,15 @@ return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1
         catch { return null; }
     }
 
-    /// <summary>Insert an approach (async FMS operation).</summary>
-    public async Task<bool> InsertApproachAsync(string slot, int approachIdx, int transIdx)
+    /// <summary>Insert + optionally activate an approach. Correct positional signature.</summary>
+    public async Task<bool> InsertApproachAsync(string slot, int approachIdx, int transIdx, bool activate = false)
     {
+        // insertApproach(facility, approachIndex, approachTransitionIndex, visRwyNum, visRwyDes, skipCourseReversal, activate)
         string js = $@"(async function(){{
   try{{
     var fac=window['_msfsba_fac_{slot}'];
     if(!fac) return 'no_fac';
-    var r=await document.querySelector('wtg1000-mfd').fms.insertApproach(
-      {{facility:fac,approachIndex:{approachIdx},approachTransitionIndex:{transIdx}}});
+    await {FmsRef}.insertApproach(fac, {approachIdx}, {transIdx}, undefined, undefined, false, {(activate ? "true" : "false")});
     return 'ok';
   }}catch(e){{return 'ERR:'+e.message;}}
 }})()";
@@ -286,42 +416,42 @@ return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1
         return r == "ok";
     }
 
-    /// <summary>Insert a departure SID.</summary>
+    /// <summary>Insert a departure SID. Correct positional signature.</summary>
     public async Task<bool> InsertDepartureAsync(string slot, int depIdx, int rwyIdx, int transIdx)
     {
-        string js = $@"(async function(){{
+        // insertDeparture(facility, departureIndex, departureRunwayIndex, enrouteTransitionIndex, oneWayRunway)
+        string js = $@"(function(){{
   try{{
     var fac=window['_msfsba_fac_{slot}'];
     if(!fac) return 'no_fac';
-    await document.querySelector('wtg1000-mfd').fms.insertDeparture(
-      {{facility:fac,departureIndex:{depIdx},departureRunwayIndex:{rwyIdx},enrouteTransitionIndex:{transIdx}}});
+    {FmsRef}.insertDeparture(fac, {depIdx}, {rwyIdx}, {transIdx});
     return 'ok';
   }}catch(e){{return 'ERR:'+e.message;}}
 }})()";
-        string? r = await _cgt.EvaluatePromiseAsync(js, 10000);
+        string? r = await _cgt.EvaluateAsync(js, 8000);
         return r == "ok";
     }
 
-    /// <summary>Insert an arrival STAR.</summary>
-    public async Task<bool> InsertArrivalAsync(string slot, int arrIdx, int rwyIdx, int transIdx)
+    /// <summary>Insert an arrival STAR. Correct positional signature.</summary>
+    public async Task<bool> InsertArrivalAsync(string slot, int arrIdx, int rwyTransIdx, int transIdx)
     {
-        string js = $@"(async function(){{
+        // insertArrival(facility, arrivalIndex, arrivalRunwayTransitionIndex, enrouteTransitionIndex, arrivalRunway)
+        string js = $@"(function(){{
   try{{
     var fac=window['_msfsba_fac_{slot}'];
     if(!fac) return 'no_fac';
-    await document.querySelector('wtg1000-mfd').fms.insertArrival(
-      {{facility:fac,arrivalIndex:{arrIdx},enrouteTransitionIndex:{transIdx},arrivalRunwayIndex:{rwyIdx}}});
+    {FmsRef}.insertArrival(fac, {arrIdx}, {rwyTransIdx}, {transIdx});
     return 'ok';
   }}catch(e){{return 'ERR:'+e.message;}}
 }})()";
-        string? r = await _cgt.EvaluatePromiseAsync(js, 10000);
+        string? r = await _cgt.EvaluateAsync(js, 8000);
         return r == "ok";
     }
 
-    /// <summary>Activate approach (begin flying it).</summary>
+    /// <summary>Activate the loaded approach (begin flying it).</summary>
     public async Task<bool> ActivateApproachAsync()
     {
-        const string js = "(function(){document.querySelector('wtg1000-mfd').fms.activateApproach();return 'ok';})()";
+        string js = $"(function(){{try{{{FmsRef}.activateApproach();return 'ok';}}catch(e){{return 'ERR:'+e.message;}}}})()";
         string? r = await _cgt.EvaluateAsync(js);
         return r == "ok";
     }
@@ -329,7 +459,7 @@ return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1
     /// <summary>Cancel direct-to.</summary>
     public async Task<bool> CancelDirectToAsync()
     {
-        const string js = "(function(){document.querySelector('wtg1000-mfd').fms.cancelDirectTo();return 'ok';})()";
+        string js = $"(function(){{try{{{FmsRef}.cancelDirectTo();return 'ok';}}catch(e){{return 'ERR:'+e.message;}}}})()";
         string? r = await _cgt.EvaluateAsync(js);
         return r == "ok";
     }
@@ -337,6 +467,7 @@ return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1
     /// <summary>List all Coherent GT pages — useful for diagnostics.</summary>
     public static Task<List<(string title, string url)>> ListPagesAsync()
         => CoherentGTClient.ListTargetsAsync(19999);
+
 
     // ─────────────────────────────────────────────────────────────────────────
     // JS expressions
@@ -363,10 +494,13 @@ return JSON.stringify({gps:sv('GPS DRIVES NAV1','bool')>0,nav:sv('AUTOPILOT NAV1
       else if(leg.leg.altDesc===2)alt=' +'+ft;
       else if(leg.leg.altDesc===3)alt=' -'+ft;
     }}catch(e){}
-    // Include segment indices so C# can call createDirectToExisting (works backwards too)
+    // Segment addressing comes from the FlightPlan API, NOT from the leg object
+    // (leg.segmentIndex is undefined). getSegmentIndex/getSegmentLegIndex map a
+    // flat global leg index to (segment, segmentLeg) — required by createDirectToExisting.
+    var sIdx=-1, sLeg=-1;
+    try{ sIdx=fp.getSegmentIndex(i); sLeg=fp.getSegmentLegIndex(i); }catch(e){}
     legs.push({ident:ident,dist:parseFloat(dist.toFixed(2)),dtk:Math.round(dtk),alt:alt,index:i,active:i===al,
-               segIdx:leg.segmentIndex!==undefined?leg.segmentIndex:-1,
-               segLeg:leg.segmentLegIndex!==undefined?leg.segmentLegIndex:-1});
+               segIdx:sIdx,segLeg:sLeg});
   }catch(e){}}
   var proc={dep:-1,arr:-1,appr:-1};
   try{var pd=fp.procedureDetails;if(pd){proc.dep=pd.departureIndex;proc.arr=pd.arrivalIndex;proc.appr=pd.approachIndex;}}catch(e){}
