@@ -71,6 +71,8 @@ public partial class MainForm : Form
     private GsxService? _gsxService;
     private MSFSBlindAssist.SimConnect.G1000FmsClient? _g1000Client;
     private Forms.GPS.G1000NavigatorForm? _g1000NavigatorForm;
+    private MSFSBlindAssist.SimConnect.G5000FmsClient? _g5000Client;
+    private Forms.GPS.G5000NavigatorForm? _g5000NavigatorForm;
     private Forms.AccessGSXForm? _accessGsxForm;
 
 
@@ -159,6 +161,7 @@ public partial class MainForm : Form
             "HS_787" => new HorizonSim787Definition(),
             "C172_CLASSIC" => new CessnaC172ClassicDefinition(),
             "C172_G1000" => new CessnaC172G1000Definition(),
+            "CITATION_LONGITUDE" => new CessnaCitationLongitudeDefinition(),
             "A2A_COMANCHE" => new A2AComancheDefinition(),
             _ => new FlyByWireA320Definition() // Default to A320
         };
@@ -1614,6 +1617,8 @@ public partial class MainForm : Form
                     ShowHS787FMCDialog();
                 else if (currentAircraft?.AircraftCode == "C172_G1000")
                     ShowG1000NavigatorForm();
+                else if (currentAircraft?.AircraftCode == "CITATION_LONGITUDE")
+                    ShowG5000NavigatorForm();
                 else
                     ShowFenixMCDUDialog();
                 break;
@@ -1792,6 +1797,24 @@ public partial class MainForm : Form
         _g1000NavigatorForm.BringToFront();
         _g1000NavigatorForm.Activate();
         _g1000NavigatorForm.EnsureVisible();
+    }
+
+    private void ShowG5000NavigatorForm()
+    {
+        if (_g5000Client == null)
+            _g5000Client = new MSFSBlindAssist.SimConnect.G5000FmsClient();
+
+        if (_g5000NavigatorForm == null || _g5000NavigatorForm.IsDisposed)
+            _g5000NavigatorForm = new Forms.GPS.G5000NavigatorForm(
+                _g5000Client, announcer,
+                MSFSBlindAssist.Settings.SettingsManager.Current.SimbriefUsername ?? "");
+
+        if (!_g5000NavigatorForm.Visible) _g5000NavigatorForm.Show();
+        _g5000NavigatorForm.TopMost = true;
+        _g5000NavigatorForm.TopMost = false;
+        _g5000NavigatorForm.BringToFront();
+        _g5000NavigatorForm.Activate();
+        _g5000NavigatorForm.EnsureVisible();
     }
 
     private void OnOutputHotkeyModeChanged(object? sender, HotkeyModeEventArgs e)
@@ -3763,6 +3786,11 @@ public partial class MainForm : Form
     private void A2AComancheMenuItem_Click(object? sender, EventArgs e)
     {
         SwitchAircraft(new A2AComancheDefinition());
+    }
+
+    private void CitationLongitudeMenuItem_Click(object? sender, EventArgs e)
+    {
+        SwitchAircraft(new CessnaCitationLongitudeDefinition());
     }
 
     private void SwitchAircraft(IAircraftDefinition newAircraft)

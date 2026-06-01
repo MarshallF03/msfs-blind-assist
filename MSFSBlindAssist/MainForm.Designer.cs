@@ -25,6 +25,7 @@ namespace MSFSBlindAssist
         private System.Windows.Forms.ToolStripMenuItem horizonSim787MenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem cessnaC172ClassicMenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem cessnaC172G1000MenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem citationLongitudeMenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem a2aComancheMenuItem = null!;
         private System.Windows.Forms.ListBox sectionsListBox = null!;
         private System.Windows.Forms.ListBox panelsListBox = null!;
@@ -64,6 +65,7 @@ namespace MSFSBlindAssist
             this.horizonSim787MenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.cessnaC172ClassicMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.cessnaC172G1000MenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.citationLongitudeMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.a2aComancheMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.sectionsListBox = new System.Windows.Forms.ListBox();
             this.panelsListBox = new System.Windows.Forms.ListBox();
@@ -231,6 +233,7 @@ namespace MSFSBlindAssist
             this.horizonSim787MenuItem,
             this.cessnaC172ClassicMenuItem,
             this.cessnaC172G1000MenuItem,
+            this.citationLongitudeMenuItem,
             this.a2aComancheMenuItem});
             this.aircraftMenuItem.Name = "aircraftMenuItem";
             this.aircraftMenuItem.Size = new System.Drawing.Size(75, 24);
@@ -315,6 +318,16 @@ namespace MSFSBlindAssist
             this.a2aComancheMenuItem.Text = "A2A &Comanche 250";
             this.a2aComancheMenuItem.Checked = false;
             this.a2aComancheMenuItem.Click += new System.EventHandler(this.A2AComancheMenuItem_Click);
+            //
+            // citationLongitudeMenuItem
+            //
+            this.citationLongitudeMenuItem.AccessibleName = "Cessna Citation Longitude";
+            this.citationLongitudeMenuItem.AccessibleDescription = "Switch to Cessna Citation Longitude with G5000 avionics";
+            this.citationLongitudeMenuItem.Name = "citationLongitudeMenuItem";
+            this.citationLongitudeMenuItem.Size = new System.Drawing.Size(240, 26);
+            this.citationLongitudeMenuItem.Text = "Citation &Longitude";
+            this.citationLongitudeMenuItem.Checked = false;
+            this.citationLongitudeMenuItem.Click += new System.EventHandler(this.CitationLongitudeMenuItem_Click);
             //
             // sectionsListBox
             // 
