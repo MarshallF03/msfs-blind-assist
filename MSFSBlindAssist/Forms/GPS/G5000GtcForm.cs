@@ -60,6 +60,43 @@ public sealed class G5000GtcForm : Form
         ("Timer", "Timer"),
     };
 
+    // 787-style Alt+letter quick jumps to GTC pages.
+    private static readonly Dictionary<Keys, (string Key, string Label)> AltShortcuts = new()
+    {
+        [Keys.F] = ("FlightPlan", "Flight Plan"),
+        [Keys.I] = ("Initialization", "Initialization"),
+        [Keys.D] = ("DirectTo", "Direct-To"),
+        [Keys.R] = ("Procedures", "Procedures"),
+        [Keys.V] = ("AdvancedVnavProfile", "VNAV Profile"),
+        [Keys.P] = ("Perf", "Performance"),
+        [Keys.H] = ("Hold", "Hold"),
+        [Keys.N] = ("Nearest", "Nearest"),
+        [Keys.W] = ("WaypointInfo", "Waypoint Info"),
+        [Keys.Y] = ("AircraftSystems", "Aircraft Systems"),
+        [Keys.T] = ("TakeoffData", "Takeoff Data"),
+        [Keys.L] = ("LandingData", "Landing Data"),
+        [Keys.E] = ("WeightAndFuel", "Weight and Fuel"),
+        [Keys.C] = ("Charts", "Charts"),
+        [Keys.B] = ("SimBrief", "SimBrief"),
+        [Keys.M] = ("MfdHome", "Home"),
+    };
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if ((keyData & Keys.Alt) == Keys.Alt && (keyData & Keys.Control) == 0 && (keyData & Keys.Shift) == 0)
+        {
+            if (AltShortcuts.TryGetValue(keyData & Keys.KeyCode, out var t)) { JumpToKey(t.Key, t.Label); return true; }
+        }
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    private async void JumpToKey(string key, string label)
+    {
+        _announcer.AnnounceImmediate($"Opening {label}");
+        if (await _gtc.NavigateAsync(key)) { await Task.Delay(450); await RefreshAsync(announce: true); }
+        else _announcer.AnnounceImmediate($"{label} not available from here");
+    }
+
     public G5000GtcForm(G5000GtcClient gtc, ScreenReaderAnnouncer announcer)
     {
         _gtc = gtc;
@@ -199,12 +236,14 @@ public sealed class G5000GtcForm : Form
             else if (e.KeyCode == Keys.Back) { e.Handled = e.SuppressKeyPress = true; _ = BackAsync(); }
         };
 
+        // No &mnemonics here — Alt+letters are reserved for page jumps (ProcessCmdKey).
+        // Use Backspace (back) and F5 (refresh) for these.
         var btnRow = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 36 };
-        var backBtn = new Button { Text = "&Back", AutoSize = true };
+        var backBtn = new Button { Text = "Back (Backspace)", AutoSize = true };
         backBtn.Click += async (_, _) => await BackAsync();
-        var homeBtn = new Button { Text = "&Home", AutoSize = true };
+        var homeBtn = new Button { Text = "Home page", AutoSize = true };
         homeBtn.Click += async (_, _) => await HomeAsync();
-        var refreshBtn = new Button { Text = "&Refresh", AutoSize = true };
+        var refreshBtn = new Button { Text = "Refresh (F5)", AutoSize = true };
         refreshBtn.Click += async (_, _) => await RefreshAsync(announce: true);
         btnRow.Controls.Add(backBtn);
         btnRow.Controls.Add(homeBtn);

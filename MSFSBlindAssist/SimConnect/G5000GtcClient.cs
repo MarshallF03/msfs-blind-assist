@@ -89,13 +89,19 @@ public sealed class G5000GtcClient : IDisposable
         string needle = text.Replace("'", "").Replace("\\", "");
         string js = $@"(function(){{try{{
   var cp={Gs}.currentPage.get();
+  var key=(cp&&cp.key)?cp.key:'?';
   var dig=function(o,d){{if(!o||d>5)return null;for(var k in o){{try{{var v=o[k];
     if(v&&v.nodeType===1)return v; if(v&&typeof v==='object'){{var r=dig(v,d+1); if(r)return r;}}}}catch(e){{}}}}return null;}};
-  var el=null; try{{el=cp.ref.thisNode.children[0].instance;}}catch(e){{}} if(!el||!el.nodeType) el=dig(cp,0);
+  var kebab=key.replace(/([a-z])([A-Z])/g,'$1-$2').toLowerCase();
+  var el=null;
+  try{{var e0=cp.ref.thisNode.children[0].instance; if(e0&&e0.nodeType===1&&e0.querySelectorAll('.touch-button,.list-item').length>0) el=e0;}}catch(e){{}}
+  if(!el){{ var best=null,bn=-1; document.querySelectorAll('[class*=page]').forEach(function(c){{ if(c.className.toString().indexOf(kebab)>=0){{ var n=c.querySelectorAll('.touch-button,.list-item,[class*=value]').length; if(n>bn){{bn=n;best=c;}} }} }}); el=best; }}
+  if(!el||!el.nodeType) el=dig(cp,0);
   if(!el) return 'no_page';
+  var txt=function(n){{var s=[];var w=function(x){{if(x.children.length===0){{var t=(x.textContent||'').replace(/\s+/g,' ').trim();if(t)s.push(t);}}else for(var i=0;i<x.children.length;i++)w(x.children[i]);}};w(n);return s.join(' ');}};
   var btns=el.querySelectorAll('.touch-button, .list-item');
   var target=null;
-  for(var i=0;i<btns.length;i++){{ var t=(btns[i].textContent||'').replace(/\s+/g,' ').trim();
+  for(var i=0;i<btns.length;i++){{ var t=txt(btns[i]);
     if(t.indexOf('{needle}')>=0){{ target=btns[i]; break; }} }}
   if(!target) return 'not_found';
   ['mousedown','mouseup','click'].forEach(function(ev){{
@@ -117,15 +123,22 @@ public sealed class G5000GtcClient : IDisposable
   var key=(cp&&cp.key)?cp.key:'?';
   var dig=function(o,d){{if(!o||d>5)return null;for(var k in o){{try{{var v=o[k];
     if(v&&v.nodeType===1)return v; if(v&&typeof v==='object'){{var r=dig(v,d+1); if(r)return r;}}}}catch(e){{}}}}return null;}};
-  var el=null; try{{el=cp.ref.thisNode.children[0].instance;}}catch(e){{}} if(!el||!el.nodeType) el=dig(cp,0);
+  var kebab=key.replace(/([a-z])([A-Z])/g,'$1-$2').toLowerCase();
+  var el=null;
+  try{{var e0=cp.ref.thisNode.children[0].instance; if(e0&&e0.nodeType===1&&e0.querySelectorAll('.touch-button,.list-item').length>0) el=e0;}}catch(e){{}}
+  if(!el){{ var best=null,bn=-1; document.querySelectorAll('[class*=page]').forEach(function(c){{ if(c.className.toString().indexOf(kebab)>=0){{ var n=c.querySelectorAll('.touch-button,.list-item,[class*=value]').length; if(n>bn){{bn=n;best=c;}} }} }}); el=best; }}
+  if(!el||!el.nodeType) el=dig(cp,0);
   if(!el) return JSON.stringify({{key:key,rows:[]}});
+  // Join a control's leaf texts with spaces so label+value don't run together
+  // ('COM1' + '119.70' -> 'COM1 119.70').
+  var txt=function(n){{var s=[];var w=function(x){{if(x.children.length===0){{var t=(x.textContent||'').replace(/\s+/g,' ').trim();if(t)s.push(t);}}else for(var i=0;i<x.children.length;i++)w(x.children[i]);}};w(n);return s.join(' ');}};
   var rows=[];
-  el.querySelectorAll('.touch-button, .list-item, [class*=title]').forEach(function(b){{
-    var t=(b.textContent||'').replace(/\s+/g,' ').trim();
+  el.querySelectorAll('.touch-button, .list-item, [class*=title], [class*=data-field]').forEach(function(b){{
+    var t=txt(b);
     var cls=b.className.toString();
-    var kind=/toggle/.test(cls)?'toggle':(/value/.test(cls)?'value':(/title/.test(cls)?'title':'button'));
+    var kind=/toggle/.test(cls)?'toggle':(/value/.test(cls)?'value':(/title/.test(cls)?'title':(/data-field/.test(cls)?'field':'button')));
     var on=/(^|[\s-])(active|selected|toggle-on|primed|cyan|checked)([\s-]|$)/.test(cls);
-    if(t && t.length<80) rows.push({{k:kind,on:on,t:t}});
+    if(t && t.length<120) rows.push({{k:kind,on:on,t:t}});
   }});
   var out=[]; for(var i=0;i<rows.length;i++){{ if(!out.length||out[out.length-1].t!==rows[i].t) out.push(rows[i]); }}
   return JSON.stringify({{key:key,rows:out}});
