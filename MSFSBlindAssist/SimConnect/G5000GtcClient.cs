@@ -91,7 +91,7 @@ public sealed class G5000GtcClient : IDisposable
   var cp={Gs}.currentPage.get();
   var dig=function(o,d){{if(!o||d>5)return null;for(var k in o){{try{{var v=o[k];
     if(v&&v.nodeType===1)return v; if(v&&typeof v==='object'){{var r=dig(v,d+1); if(r)return r;}}}}catch(e){{}}}}return null;}};
-  var el=null; try{el=cp.ref.thisNode.children[0].instance;}catch(e){} if(!el||!el.nodeType) el=dig(cp,0);
+  var el=null; try{{el=cp.ref.thisNode.children[0].instance;}}catch(e){{}} if(!el||!el.nodeType) el=dig(cp,0);
   if(!el) return 'no_page';
   var btns=el.querySelectorAll('.touch-button, .list-item');
   var target=null;
