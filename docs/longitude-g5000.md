@@ -175,3 +175,32 @@ AirwaySelectionDialog, RunwayLengthDialog, FmsSpeedDialog, MomentArmDialog, ...`
    francescotissera1211 display-agent pattern.
 
 Transport (`CoherentGTClient`) is reused unchanged — it is aircraft-agnostic.
+
+## Approach A (GTC mirror) — interaction findings (live 2026-06-01)
+
+Confirmed the GTC page mirror is feasible:
+- Navigate: `gtcService.changePageTo('<ViewKey>')`, `goToHomePage()`, `goBack()`.
+- **Each page renders into a semantically-classed container** that persists in the
+  DOM even when that GTC isn't the focused touchscreen — e.g. FlightPlan lives in
+  `.gtc-page-flight-plan` → `.flight-plan-box` → `.flight-plan-list` →
+  `.flight-plan-leg-button` / `.list-item`. Read by **content/class, NOT
+  offsetParent** (a non-focused GTC reports its nodes as `hidden`/offsetParent=null
+  but the text is present and correct).
+- Live read of FlightPlan returned the real structure incl. segment headers
+  (Origin/Enroute/Destination), **airways shown as collapsed segments
+  ("Airway – L975.GOLUM (collapsed)")**, and per-leg data-field templates.
+- Interaction = dispatch a click/mouse event on a `.touch-button` element (or call
+  the GTC's button handler). Each page has its own class vocabulary, so **each page
+  needs its own small scraper/click-map** — this is the per-page cost, and the
+  class names + view keys are what a major WT update could rename (fragility).
+
+### Speed control reality (why Ctrl+S / AP_SPD_VAR_SET does nothing)
+The Longitude's speed is **FMS-schedule-managed**, not a simple FCU speed bug.
+`fsInstrument.fmsSpeedManager` holds `apSelectedIas` (Subject, read-only-ish),
+`userTargetIas` (Subject; settable but ignored unless manual mode is active),
+and `apSelectedSpeedIsManual` (computed, NOT directly settable). Speed schedules
+live in `fmsSpeedsSettingManager` (`fmsSpeedClimbIas`, `fmsSpeedPilotClimbIas`,
+`fmsSpeedCruiseIas`, `fmsSpeedDescentIas`, … + pilot-override variants per phase).
+`AP_SPD_VAR_SET` / `AP_SPD_VAR_INC` do NOT move it. Manual speed override is set
+via the GTC **FmsSpeed dialog** (approach A) or by writing the pilot-phase speed
+setting — to be implemented.
