@@ -73,6 +73,8 @@ public partial class MainForm : Form
     private Forms.GPS.G1000NavigatorForm? _g1000NavigatorForm;
     private MSFSBlindAssist.SimConnect.G5000FmsClient? _g5000Client;
     private Forms.GPS.G5000NavigatorForm? _g5000NavigatorForm;
+    private MSFSBlindAssist.SimConnect.G5000GtcClient? _g5000GtcClient;
+    private Forms.GPS.G5000GtcForm? _g5000GtcForm;
     private Forms.AccessGSXForm? _accessGsxForm;
 
 
@@ -1574,6 +1576,11 @@ public partial class MainForm : Form
             case HotkeyAction.ShowTcasWindow:
                 OpenTcasWindow();
                 break;
+            case HotkeyAction.ShowECAM:
+                // Repurposed for the Longitude: Shift+U opens the live GTC mirror.
+                if (currentAircraft?.AircraftCode == "CITATION_LONGITUDE")
+                    ShowG5000GtcForm();
+                break;
             case HotkeyAction.AnnounceTcasTraffic:
                 AnnounceTrackedTcasTraffic();
                 break;
@@ -1826,6 +1833,20 @@ public partial class MainForm : Form
         _g5000NavigatorForm.BringToFront();
         _g5000NavigatorForm.Activate();
         _g5000NavigatorForm.EnsureVisible();
+    }
+
+    private void ShowG5000GtcForm()
+    {
+        _g5000GtcClient ??= new MSFSBlindAssist.SimConnect.G5000GtcClient();
+        if (_g5000GtcForm == null || _g5000GtcForm.IsDisposed)
+            _g5000GtcForm = new Forms.GPS.G5000GtcForm(_g5000GtcClient, announcer);
+
+        if (!_g5000GtcForm.Visible) _g5000GtcForm.Show();
+        _g5000GtcForm.TopMost = true;
+        _g5000GtcForm.TopMost = false;
+        _g5000GtcForm.BringToFront();
+        _g5000GtcForm.Activate();
+        _g5000GtcForm.EnsureVisible();
     }
 
     private void OnOutputHotkeyModeChanged(object? sender, HotkeyModeEventArgs e)
