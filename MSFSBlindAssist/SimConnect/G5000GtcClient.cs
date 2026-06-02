@@ -92,11 +92,7 @@ public sealed class G5000GtcClient : IDisposable
   var key=(cp&&cp.key)?cp.key:'?';
   var dig=function(o,d){{if(!o||d>5)return null;for(var k in o){{try{{var v=o[k];
     if(v&&v.nodeType===1)return v; if(v&&typeof v==='object'){{var r=dig(v,d+1); if(r)return r;}}}}catch(e){{}}}}return null;}};
-  var kebab=key.replace(/([a-z])([A-Z])/g,'$1-$2').toLowerCase();
-  var el=null;
-  try{{var e0=cp.ref.thisNode.children[0].instance; if(e0&&e0.nodeType===1&&e0.querySelectorAll('.touch-button,.list-item').length>0) el=e0;}}catch(e){{}}
-  if(!el){{ var best=null,bn=-1; document.querySelectorAll('[class*=page]').forEach(function(c){{ if(c.className.toString().indexOf(kebab)>=0){{ var n=c.querySelectorAll('.touch-button,.list-item,[class*=value]').length; if(n>bn){{bn=n;best=c;}} }} }}); el=best; }}
-  if(!el||!el.nodeType) el=dig(cp,0);
+  var el={ActivePageRootJs};
   if(!el) return 'no_page';
   var txt=function(n){{var s=[];var w=function(x){{if(x.children.length===0){{var t=(x.textContent||'').replace(/\s+/g,' ').trim();if(t)s.push(t);}}else for(var i=0;i<x.children.length;i++)w(x.children[i]);}};w(n);return s.join(' ');}};
   var btns=el.querySelectorAll('.touch-button, .list-item');
@@ -114,6 +110,20 @@ public sealed class G5000GtcClient : IDisposable
     public static Task<List<(string title, string url)>> ListPagesAsync()
         => CoherentGTClient.ListTargetsAsync(19999);
 
+    // Resolves the ACTIVE GTC page's DOM root, as an expression (closes over `cp`
+    // and `dig` in the calling scope). The active page is the only non-hidden
+    // .gtc-page-wrapper carrying an extra class beyond the base two ("gtc-page-open*"
+    // marker, persists after the open animation — verified live). The persistent
+    // home-menu strips are plain "gtc-view gtc-page-wrapper" (classList length 2),
+    // which is why an unfiltered scrape showed "everything". Falls back to the ref
+    // path / generic dig for edge pages (e.g. the home menu itself).
+    private const string ActivePageRootJs = @"(function(){
+  var w=document.querySelectorAll('.gtc-page-wrapper:not(.hidden)');
+  for(var i=0;i<w.length;i++){ if(w[i].classList.length>2 && w[i].querySelectorAll('.touch-button,.list-item').length>0) return w[i]; }
+  try{ var e0=cp.ref.thisNode.children[0].instance; if(e0&&e0.nodeType===1 && e0.querySelectorAll('.touch-button,.list-item').length>0) return e0; }catch(e){}
+  return dig(cp,0);
+})()";
+
     // Active-page reader. Locates the active page's DOM root via currentPage ref
     // (NOT visibility — a non-focused GTC marks everything .hidden), then dumps
     // its controls in order with toggle state.
@@ -123,11 +133,7 @@ public sealed class G5000GtcClient : IDisposable
   var key=(cp&&cp.key)?cp.key:'?';
   var dig=function(o,d){{if(!o||d>5)return null;for(var k in o){{try{{var v=o[k];
     if(v&&v.nodeType===1)return v; if(v&&typeof v==='object'){{var r=dig(v,d+1); if(r)return r;}}}}catch(e){{}}}}return null;}};
-  var kebab=key.replace(/([a-z])([A-Z])/g,'$1-$2').toLowerCase();
-  var el=null;
-  try{{var e0=cp.ref.thisNode.children[0].instance; if(e0&&e0.nodeType===1&&e0.querySelectorAll('.touch-button,.list-item').length>0) el=e0;}}catch(e){{}}
-  if(!el){{ var best=null,bn=-1; document.querySelectorAll('[class*=page]').forEach(function(c){{ if(c.className.toString().indexOf(kebab)>=0){{ var n=c.querySelectorAll('.touch-button,.list-item,[class*=value]').length; if(n>bn){{bn=n;best=c;}} }} }}); el=best; }}
-  if(!el||!el.nodeType) el=dig(cp,0);
+  var el={ActivePageRootJs};
   if(!el) return JSON.stringify({{key:key,rows:[]}});
   // Join a control's leaf texts with spaces so label+value don't run together
   // ('COM1' + '119.70' -> 'COM1 119.70').
