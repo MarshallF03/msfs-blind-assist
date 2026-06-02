@@ -107,6 +107,29 @@ public sealed class G5000GtcClient : IDisposable
         return await _cgt.EvaluateAsync(js, 3000) == "ok";
     }
 
+    /// <summary>
+    /// Set total fuel on board (US gallons), split evenly across the two main tanks,
+    /// via CDP SimVar write — then read the resulting total back so the caller can
+    /// confirm the value out loud. This is the reliable, self-verifiable input path:
+    /// value-entry numpads don't open from a background GTC, but the backing SimVars
+    /// are directly settable (verified live 2026-06-02: 600+600 → 1188 total).
+    /// Returns the confirmed new total, or null on failure.
+    /// </summary>
+    public async Task<double?> SetFuelGallonsAsync(double totalGallons)
+    {
+        if (!_cgt.IsConnected && !await TryConnectAsync()) return null;
+        double each = Math.Max(0, totalGallons) / 2.0;
+        string e = each.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        string js = $@"(function(){{try{{
+  SimVar.SetSimVarValue('FUEL TANK LEFT MAIN QUANTITY','gallons',{e});
+  SimVar.SetSimVarValue('FUEL TANK RIGHT MAIN QUANTITY','gallons',{e});
+  return SimVar.GetSimVarValue('FUEL TOTAL QUANTITY','gallons');
+}}catch(err){{return -1;}}}})()";
+        string? r = await _cgt.EvaluateAsync(js, 2500);
+        return double.TryParse(r, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out double v) && v >= 0 ? v : (double?)null;
+    }
+
     public static Task<List<(string title, string url)>> ListPagesAsync()
         => CoherentGTClient.ListTargetsAsync(19999);
 

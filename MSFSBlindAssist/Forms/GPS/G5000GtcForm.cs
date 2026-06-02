@@ -180,6 +180,16 @@ public sealed class G5000GtcForm : Form
         int i = _controls.SelectedIndex;
         if (_page == null || i < 0 || i >= _page.Controls.Count) return;
         var ctrl = _page.Controls[i];
+
+        // Value-entry fields can't open their GTC numpad from a background touchscreen,
+        // so for fields we have a verifiable backend for, take the value via the
+        // accessible input box and write it directly (confirmed by read-back).
+        if (ctrl.Kind == "value" && ctrl.Text.IndexOf("Fuel On Board", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            PromptFuelEntry();
+            return;
+        }
+
         string prevKey = _page.Key;
         _announcer.AnnounceImmediate($"Pressing {ctrl.Text}");
         bool ok = await _gtc.PressByTextAsync(ctrl.Text);
@@ -194,6 +204,25 @@ public sealed class G5000GtcForm : Form
                 $"{ctrl.Text}. No keypad opened — numeric entry isn't wired yet for this field.");
         else if (_page != null)
             _announcer.AnnounceImmediate($"{Friendly(_page.Key)}, {_page.Controls.Count} controls");
+    }
+
+    private void PromptFuelEntry()
+    {
+        var form = new MSFSBlindAssist.Forms.ValueInputForm(
+            "Set Fuel On Board", "Total fuel in US gallons", "0 to 2178",
+            _announcer,
+            input => (double.TryParse(input.Trim(), out double g) && g >= 0 && g <= 2178, "Enter 0 to 2178 gallons"));
+        form.FormClosed += async (_, _) =>
+        {
+            if (form.DialogResult != DialogResult.OK || !double.TryParse(form.InputValue.Trim(), out double gal)) return;
+            _announcer.AnnounceImmediate($"Setting fuel to {gal:0} gallons");
+            double? confirmed = await _gtc.SetFuelGallonsAsync(gal);
+            _announcer.AnnounceImmediate(confirmed.HasValue
+                ? $"Fuel on board {confirmed.Value:0} gallons"
+                : "Fuel set failed");
+            await RefreshAsync(announce: false);
+        };
+        form.Show(this);
     }
 
     private async Task BackAsync()
