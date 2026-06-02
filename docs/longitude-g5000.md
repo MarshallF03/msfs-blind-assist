@@ -194,6 +194,31 @@ Confirmed the GTC page mirror is feasible:
   needs its own small scraper/click-map** — this is the per-page cost, and the
   class names + view keys are what a major WT update could rename (fragility).
 
+### GTC interaction matrix (live dig 2026-06-02) — what works, what's needed
+
+Tested by driving a background GTC (GTC_2) via synthetic DOM events:
+
+| Action | Via approach A | Notes |
+|---|---|---|
+| Navigate to any page | ✅ works | all Alt jumps + combo; changePageTo(key) |
+| Read active page (isolated) | ✅ works | non-hidden `.gtc-page-wrapper` with extra class |
+| Press **navigation** button | ✅ works | Perf → Takeoff Data opened |
+| Press **toggle/selection** button | ✅ works | Nav light toggled Off→On→Off live (LIGHT NAV simvar followed) |
+| Open **value-entry dialog** (numpad/keyboard/list) | ❌ no-op | clicking a `.touch-button-value` (Crew & Stores, Fuel On Board…) did NOT open the numpad; tried mouse+coords, pointer events, deferred mouseup — none opened a popup; overlay stack stayed empty |
+
+**Interpretation:** toggle/nav `onPressed` acts synchronously (state/page change) and
+fires fine from synthetic events. Value-entry `onPressed` calls `gtcService.openPopup`,
+which appears gated on the GTC being the focused interaction unit — so it no-ops when
+driving a *background* GTC. **Unverified:** whether the numpad DOES open when BA drives
+the GTC that the sim is actively showing. If it does, driving the numpad digits (they
+behave like toggles, which respond) gives full input via A. If not, value input must
+go through a reliable backend (fms object / setting manager / SimVar) behind the
+accessible ValueInputForm — a per-field "scratchpad".
+
+**Also needed:** per-page semantic formatting. Generic scrape reads bespoke layouts
+loosely (e.g. Exterior Lights returns "On/Off/Normal" without each light's name, which
+sits in a separate label element). Each such page needs tailored label↔control pairing.
+
 ### Speed control reality (why Ctrl+S / AP_SPD_VAR_SET does nothing)
 The Longitude's speed is **FMS-schedule-managed**, not a simple FCU speed bug.
 `fsInstrument.fmsSpeedManager` holds `apSelectedIas` (Subject, read-only-ish),

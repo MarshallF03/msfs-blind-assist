@@ -180,11 +180,20 @@ public sealed class G5000GtcForm : Form
         int i = _controls.SelectedIndex;
         if (_page == null || i < 0 || i >= _page.Controls.Count) return;
         var ctrl = _page.Controls[i];
+        string prevKey = _page.Key;
         _announcer.AnnounceImmediate($"Pressing {ctrl.Text}");
         bool ok = await _gtc.PressByTextAsync(ctrl.Text);
-        if (!ok) { _announcer.AnnounceImmediate("Press failed"); return; }
+        if (!ok) { _announcer.AnnounceImmediate("Control not found on page"); return; }
         await Task.Delay(500);            // let the GTC react (value change or sub-page)
-        await RefreshAsync(announce: true);
+        await RefreshAsync(announce: false);
+
+        // Value-entry fields open a numpad via openPopup, which doesn't fire from a
+        // background GTC — give honest feedback instead of a silent no-op.
+        if (_page != null && _page.Key == prevKey && ctrl.Kind == "value")
+            _announcer.AnnounceImmediate(
+                $"{ctrl.Text}. No keypad opened — numeric entry isn't wired yet for this field.");
+        else if (_page != null)
+            _announcer.AnnounceImmediate($"{Friendly(_page.Key)}, {_page.Controls.Count} controls");
     }
 
     private async Task BackAsync()
