@@ -68,4 +68,15 @@ public class FeatureDestinationResolverTests
         Assert.False(FeatureDestinationResolver.IsRoutable(kind));
         Assert.Null(FeatureDestinationResolver.Resolve(F(kind, "X", 47.27, -122.57), new List<ParkingSpot> { S(4, 47.27, -122.57) }, NodeAt));
     }
+
+    [Fact]
+    public void Label_names_a_letterless_stand_as_gate_or_spot()
+    {
+        var fbo = F(FeatureKind.Fbo, "Signature", 47.2700, -122.5700);
+        var ga = new ParkingSpot { Type = 4, Latitude = 47.2703, Longitude = -122.5700, Name = "", Number = 12, Heading = 0 };
+        Assert.Equal("Signature, FBO, Spot 12", FeatureDestinationResolver.Label(FeatureDestinationResolver.Resolve(fbo, new List<ParkingSpot> { ga }, NoNode)!));
+        var term = F(FeatureKind.Terminal, "North Terminal", 47.2700, -122.5700);
+        var gate = new ParkingSpot { Type = 10, Latitude = 47.2703, Longitude = -122.5700, Name = "", Number = 7, Suffix = "A", Heading = 0 };
+        Assert.Equal("North Terminal, terminal, Gate 7A", FeatureDestinationResolver.Label(FeatureDestinationResolver.Resolve(term, new List<ParkingSpot> { gate }, NoNode)!));
+    }
 }

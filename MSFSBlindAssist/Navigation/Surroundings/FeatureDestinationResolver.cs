@@ -64,7 +64,17 @@ public static class FeatureDestinationResolver
     {
         string kind = FeatureKindWords.Generic(d.Feature.Kind);
         string kindWord = kind == "FBO" ? kind : kind.ToLowerInvariant();
-        string where = d.Spot != null ? $"{d.Spot.Name} {d.Spot.Number}{d.Spot.Suffix}".Trim() : "end of taxiway";
+        string where;
+        if (d.Spot == null) where = "end of taxiway";
+        else
+        {
+            string ident = $"{d.Spot.Number}{d.Spot.Suffix}".Trim();
+            where = string.IsNullOrWhiteSpace(d.Spot.Name)
+                ? (IsGateType(d.Spot.Type) ? $"Gate {ident}" : $"Spot {ident}")
+                : $"{d.Spot.Name} {ident}".Trim();
+        }
         return $"{d.Feature.SpokenName}, {kindWord}, {where}";
     }
+
+    private static bool IsGateType(int type) => type is 9 or 10 or 11 or 13 or 14;
 }
