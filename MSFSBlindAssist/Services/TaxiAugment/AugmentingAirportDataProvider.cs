@@ -27,7 +27,7 @@ namespace MSFSBlindAssist.Services.TaxiAugment;
 /// base provider — this class is transparent to all existing consumers.
 /// </para>
 /// </summary>
-public sealed class AugmentingAirportDataProvider : IAirportDataProvider
+public sealed class AugmentingAirportDataProvider : IAirportDataProvider, IAirportFacilitiesProvider
 {
     // ── Construction ────────────────────────────────────────────────────────
     private readonly IAirportDataProvider _base;
@@ -119,6 +119,8 @@ public sealed class AugmentingAirportDataProvider : IAirportDataProvider
     public HashSet<string> GetAllAirportICAOs()                                   => _base.GetAllAirportICAOs();
     public List<string> GetNearbyAirportICAOs(double lat, double lon, double nm)  => _base.GetNearbyAirportICAOs(lat, lon, nm);
     public List<StartPosition> GetRunwayStarts(string icao)                       => _base.GetRunwayStarts(icao);
+    public AirportFacilities? GetAirportFacilities(string icao)
+        => (_base as IAirportFacilitiesProvider)?.GetAirportFacilities(icao);
 
     /// <summary>
     /// Returns parking spots for the airport, filling in EMPTY navdata gate/stand names from the

@@ -7,7 +7,7 @@ namespace MSFSBlindAssist.Database;
 /// Airport data provider using navdatareader-generated databases.
 /// Supports both FS2020 and FS2024 databases using the Little Navmap schema.
 /// </summary>
-public class LittleNavMapProvider : IAirportDataProvider
+public class LittleNavMapProvider : IAirportDataProvider, IAirportFacilitiesProvider
 {
     private readonly string _connectionString;
     private readonly string _simulatorVersion;
@@ -494,6 +494,54 @@ public class LittleNavMapProvider : IAirportDataProvider
         }
 
         return parkingSpots;
+    }
+
+    public AirportFacilities? GetAirportFacilities(string icao)
+    {
+        if (!DatabaseExists) return null;
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        long airportId; bool avgas, jet; double left, right, top, bottom; string sceneryPath;
+        using (var cmd = new SqliteCommand(@"
+            SELECT airport_id, has_avgas, has_jetfuel, left_lonx, right_lonx, top_laty, bottom_laty, scenery_local_path
+            FROM airport WHERE UPPER(icao) = UPPER(@ICAO) OR UPPER(ident) = UPPER(@ICAO) LIMIT 1", connection))
+        {
+            cmd.Parameters.AddWithValue("@ICAO", icao);
+            using var r = cmd.ExecuteReader();
+            if (!r.Read()) return null;
+            airportId = Convert.ToInt64(r["airport_id"]);
+            avgas = Convert.ToInt32(r["has_avgas"] ?? 0) == 1;
+            jet = Convert.ToInt32(r["has_jetfuel"] ?? 0) == 1;
+            left = Convert.ToDouble(r["left_lonx"] ?? 0.0);
+            right = Convert.ToDouble(r["right_lonx"] ?? 0.0);
+            top = Convert.ToDouble(r["top_laty"] ?? 0.0);
+            bottom = Convert.ToDouble(r["bottom_laty"] ?? 0.0);
+            sceneryPath = r["scenery_local_path"]?.ToString() ?? "";
+        }
+
+        var fac = new AirportFacilities
+        {
+            Icao = icao.ToUpperInvariant(), HasAvgas = avgas, HasJetFuel = jet,
+            LeftLon = left, RightLon = right, TopLat = top, BottomLat = bottom, SceneryLocalPath = sceneryPath,
+        };
+
+        using (var cmd = new SqliteCommand("SELECT laty, lonx FROM helipad WHERE airport_id = @Id AND is_closed = 0", connection))
+        {
+            cmd.Parameters.AddWithValue("@Id", airportId);
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                fac.Helipads.Add(new Navigation.Surroundings.LatLon(Convert.ToDouble(r["laty"]), Convert.ToDouble(r["lonx"])));
+        }
+
+        using (var cmd = new SqliteCommand("SELECT type, frequency, name FROM com WHERE airport_id = @Id ORDER BY com_id", connection))
+        {
+            cmd.Parameters.AddWithValue("@Id", airportId);
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                fac.Coms.Add(new ComFrequency(r["type"]?.ToString() ?? "", Convert.ToInt32(r["frequency"] ?? 0), r["name"]?.ToString() ?? ""));
+        }
+        return fac;
     }
 
     public bool AirportExists(string icao)
