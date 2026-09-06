@@ -3196,7 +3196,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Produces: `static List<AirportFeature> GsxTerminalFeatureSource.Read(IReadOnlyList<ParkingSpot> selectableGates)` — groups GSX-sourced spots by `SpeakableTerminalName`, ≥ 2 stands per group, `Source = FeatureSource.Gsx`, `Kind = Concourse` when the name contains "Concourse" else `Terminal`, `Name` = the speakable terminal name.
-- Consumes: `ParkingSpot.Source == GateSource.Gsx`, `ParkingSpot.TerminalName`, `ParkingSpot.SpeakableTerminalName` (existing, strips the "=< Medium" / "N/A" tails).
+- Consumes: `ParkingSpot.Source == GateSource.Gsx`, `ParkingSpot.TerminalName`, `ParkingSpot.SpeakableTerminalName(string? terminalName)` (existing STATIC method at ParkingSpot.cs:~310, strips the "=< Medium" / "N/A" tails; if it is private, make it `internal static` — the test project has InternalsVisibleTo).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -3257,8 +3257,8 @@ public static class GsxTerminalFeatureSource
     {
         var result = new List<AirportFeature>();
         var groups = selectableGates
-            .Where(s => s.Source == GateSource.Gsx && !string.IsNullOrWhiteSpace(s.SpeakableTerminalName))
-            .GroupBy(s => s.SpeakableTerminalName.Trim(), StringComparer.OrdinalIgnoreCase);
+            .Where(s => s.Source == GateSource.Gsx && !string.IsNullOrWhiteSpace(ParkingSpot.SpeakableTerminalName(s.TerminalName)))
+            .GroupBy(s => ParkingSpot.SpeakableTerminalName(s.TerminalName).Trim(), StringComparer.OrdinalIgnoreCase);
         foreach (var g in groups)
         {
             var members = g.ToList();
