@@ -713,6 +713,7 @@ public partial class MainForm
             {
                 _routeAdvisoryProximity.Reset();
                 _emptyRouteFeedTicks = 0;
+                surroundingsMonitor?.Reset();
                 Log.Debug("MainForm", "route-advisory proximity reset (turnaround liftoff)");
             }
 

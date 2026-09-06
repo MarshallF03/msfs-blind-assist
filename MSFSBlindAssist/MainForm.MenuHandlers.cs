@@ -219,6 +219,10 @@ public partial class MainForm
         if (_augmentingProvider != null)
             _augmentingProvider.Enabled = settings.TaxiAugmentEnabled;
 
+        // Opt-in passing-building callouts — applies immediately, no restart needed.
+        if (surroundingsMonitor != null)
+            surroundingsMonitor.Enabled = settings.SurroundingsCalloutsEnabled;
+
         // VATSIM: install or refresh the vPilot plugin and start/stop the pipe server.
         var vatsimInstall = vatsimService?.ApplySettings(settings);
         if (vatsimInstall != null)

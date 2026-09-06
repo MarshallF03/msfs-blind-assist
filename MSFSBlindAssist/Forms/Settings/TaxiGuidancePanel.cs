@@ -49,6 +49,7 @@ public class TaxiGuidancePanel : UserControl, ISettingsPanel
     private Label taxiAugmentAttributionLabel = null!;
     private CheckBox sceneryIndexEnabledCheckBox = null!;
     private TextBox sceneryIndexStatusTextBox = null!;
+    private CheckBox surroundingsCalloutsCheckBox = null!;
 
     // Optional callback for the manual taxiway-names refresh. Null when the caller doesn't
     // supply augmenting-provider support — the button disables itself in that case.
@@ -466,13 +467,25 @@ public class TaxiGuidancePanel : UserControl, ISettingsPanel
             AccessibleName = "Scenery index status"
         };
 
+        // Opt-in "Passing Concourse B, on the left." callouts while taxiing, fed by the
+        // same surroundings catalog the scenery index above and the Where-Am-I readout
+        // draw from. Placed directly below the scenery-index status box.
+        surroundingsCalloutsCheckBox = new CheckBox
+        {
+            Text = "Announce airport buildings as you taxi past them",
+            Location = new Point(20, 905),
+            Size = new Size(450, 40),
+            AccessibleName = "Announce airport buildings as you taxi past them",
+            AccessibleDescription = "When enabled, says for example Passing Concourse B, on the left, as a terminal, hangar, tower, fuel or cargo area comes abeam while taxiing. Queued behind taxi guidance, never during takeoff, landing rollout or docking. Applies immediately."
+        };
+
         // SayIntentions route import. It lives here rather than on a tab of its own:
         // the setting decides what happens to a TAXI ROUTE, which is this tab's
         // subject, and it was the only option left once the API key was retired.
         sayIntentionsHeadingLabel = new Label
         {
             Text = "SayIntentions",
-            Location = new Point(20, 930),
+            Location = new Point(20, 973),
             Size = new Size(450, 20),
             AccessibleName = "SayIntentions section"
         };
@@ -486,7 +499,7 @@ public class TaxiGuidancePanel : UserControl, ISettingsPanel
         sayIntentionsAutoStartCheckBox = new CheckBox
         {
             Text = "SayIntentions import starts taxi &guidance immediately",
-            Location = new Point(20, 955),
+            Location = new Point(20, 998),
             Size = new Size(450, 40),
             AccessibleName = "SayIntentions import starts taxi guidance immediately",
             AccessibleDescription = "When checked, a SayIntentions import starts guidance immediately "
@@ -510,6 +523,7 @@ public class TaxiGuidancePanel : UserControl, ISettingsPanel
             refreshTaxiwayNamesButton,
             taxiAugmentEnabledCheckBox, taxiAugmentAttributionLabel,
             sceneryIndexEnabledCheckBox, sceneryIndexStatusTextBox,
+            surroundingsCalloutsCheckBox,
             sayIntentionsHeadingLabel,
             sayIntentionsAutoStartCheckBox
         });
@@ -542,6 +556,7 @@ public class TaxiGuidancePanel : UserControl, ISettingsPanel
         taxiAugmentEnabledCheckBox.TabIndex = tabIdx++;
         sceneryIndexEnabledCheckBox.TabIndex = tabIdx++;
         sceneryIndexStatusTextBox.TabIndex = tabIdx++;
+        surroundingsCalloutsCheckBox.TabIndex = tabIdx++;
         sayIntentionsAutoStartCheckBox.TabIndex = tabIdx++;
     }
 
@@ -698,6 +713,7 @@ public class TaxiGuidancePanel : UserControl, ISettingsPanel
         taxiAugmentEnabledCheckBox.Checked = settings.TaxiAugmentEnabled;
         sceneryIndexEnabledCheckBox.Checked = settings.SceneryIndexEnabled;
         sceneryIndexStatusTextBox.Text = _sceneryIndexStatus?.Invoke() ?? "";
+        surroundingsCalloutsCheckBox.Checked = settings.SurroundingsCalloutsEnabled;
         sayIntentionsAutoStartCheckBox.Checked = settings.SayIntentionsAutoStartTaxiGuidance;
     }
 
@@ -741,6 +757,7 @@ public class TaxiGuidancePanel : UserControl, ISettingsPanel
 
         settings.TaxiAugmentEnabled = taxiAugmentEnabledCheckBox.Checked;
         settings.SceneryIndexEnabled = sceneryIndexEnabledCheckBox.Checked;
+        settings.SurroundingsCalloutsEnabled = surroundingsCalloutsCheckBox.Checked;
         settings.SayIntentionsAutoStartTaxiGuidance = sayIntentionsAutoStartCheckBox.Checked;
     }
 

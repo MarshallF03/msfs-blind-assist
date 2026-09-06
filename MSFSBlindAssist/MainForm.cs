@@ -201,6 +201,7 @@ public partial class MainForm : Form
     private LandingExitPlanner landingExitPlanner = null!;
 
     private GroundTrafficMonitor groundTrafficMonitor = null!;
+    private MSFSBlindAssist.Services.AirportSurroundingsMonitor? surroundingsMonitor;
     private SayIntentionsService sayIntentionsService = null!;
 
     // Access GSX integration — owns its own SimConnect client (distinct
@@ -747,6 +748,20 @@ public partial class MainForm : Form
             || taxiGuidanceManager.State == TaxiGuidanceState.Inactive
             || taxiGuidanceManager.State == TaxiGuidanceState.LandingRollout;
 
+        // Opt-in "Passing Concourse B, on the left." callouts while taxiing. Own 2 s poll
+        // timer (same shape as groundTrafficMonitor above) — the taxi position stream is
+        // taxi-scoped and off when no route is loaded, so this cannot ride it.
+        surroundingsMonitor = new MSFSBlindAssist.Services.AirportSurroundingsMonitor(announcer, simConnectManager, () => airportDataProvider, surroundingsCache)
+        {
+            Enabled = MSFSBlindAssist.Settings.SettingsManager.Current.SurroundingsCalloutsEnabled,
+            SuppressCheck = () =>
+                takeoffAssistManager.IsActive
+                || dockingGuidanceManager.IsActive
+                || taxiGuidanceManager.State is TaxiGuidanceState.LandingRollout or TaxiGuidanceState.LiningUp
+                    or TaxiGuidanceState.HoldShort or TaxiGuidanceState.ProgressiveHold
+                    or TaxiGuidanceState.BacktrackingOnRunway or TaxiGuidanceState.BacktrackDeparture,
+        };
+
         // Per-aircraft rollout-anticipation lead for the taxi steering tone
         // (see IAircraftDefinition.TaxiTurnLeadSeconds).
         taxiGuidanceManager.TurnLeadSeconds = currentAircraft.TaxiTurnLeadSeconds;
@@ -1025,6 +1040,7 @@ public partial class MainForm : Form
         taxiGuidanceManager?.Dispose();
         dockingGuidanceManager?.Dispose();
         groundTrafficMonitor?.Dispose();
+        surroundingsMonitor?.Dispose();
         // Owns two tone generators — without this they keep sounding on shutdown.
         flareAssistManager?.Dispose();
 

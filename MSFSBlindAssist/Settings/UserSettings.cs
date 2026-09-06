@@ -411,6 +411,12 @@ public class UserSettings
         public bool SceneryIndexEnabled { get; set; } = true;
 
         /// <summary>
+        /// Opt-in "Passing Concourse B, on the left." callouts while taxiing (AirportSurroundingsMonitor).
+        /// Default OFF like every other automatic announcement. Applies immediately.
+        /// </summary>
+        public bool SurroundingsCalloutsEnabled { get; set; } = false;
+
+        /// <summary>
         /// Ground-speed announcement cadence used WHILE TAKEOFF ASSIST IS ACTIVE,
         /// applied by the global <see cref="Services.GroundSpeedAnnouncer"/> (NOT a
         /// separate announcer). Sentinel-encoded:
@@ -641,6 +647,7 @@ public class UserSettings
             TaxiGuidanceGroundSpeedAnnounceInterval = TaxiGuidanceGroundSpeedAnnounceInterval,
             TaxiAugmentEnabled = TaxiAugmentEnabled,
             SceneryIndexEnabled = SceneryIndexEnabled,
+            SurroundingsCalloutsEnabled = SurroundingsCalloutsEnabled,
             TakeoffAssistGroundSpeedAnnounceInterval = TakeoffAssistGroundSpeedAnnounceInterval,
             Hs787CommunityFolderOverride = Hs787CommunityFolderOverride,
             Hs787SimVersionOverride = Hs787SimVersionOverride,
