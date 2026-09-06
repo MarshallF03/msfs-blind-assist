@@ -64,4 +64,13 @@ public class BglPlacementReaderTests
         BitConverter.TryWriteBytes(bgl.AsSpan(0x38 + 20 + 16, 2), (ushort)0x0E);   // flip the record id
         Assert.Empty(BglPlacementReader.Read(bgl));
     }
+
+    [Fact]
+    public void Corrupt_subsection_offset_near_uint_max_does_not_throw()
+    {
+        var bgl = BuildBgl((1, 1, 0, Guid.NewGuid()));
+        // Section entry 0 lives at 0x38: (type, flags, subCount, offset, size). Poison the subsection offset.
+        BitConverter.TryWriteBytes(bgl.AsSpan(0x38 + 12, 4), 0xFFFFFFF0u);
+        Assert.Empty(BglPlacementReader.Read(bgl));
+    }
 }

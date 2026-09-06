@@ -30,12 +30,13 @@ public static class BglPlacementReader
             if (e + SectionEntrySize > b.Length) break;
             if (U32(b, e) != SceneryObjectSection) continue;
             uint subCount = U32(b, e + 8), subOff = U32(b, e + 12), subSize = U32(b, e + 16);
-            if (subCount == 0 || subSize < 16 || subOff + subSize > b.Length) continue;
+            if (subCount == 0 || subSize < 16 || subOff >= b.Length || (long)subOff + subSize > b.Length) continue;
             int subEntry = (int)(subSize / subCount);
             if (subEntry < 16) continue;
             for (uint i = 0; i < subCount; i++)
             {
                 int so = (int)subOff + (int)i * subEntry;
+                if ((long)so + subEntry > b.Length) continue;
                 uint dataOff = U32(b, so + subEntry - 8), dataSize = U32(b, so + subEntry - 4);
                 if (dataOff >= b.Length) continue;
                 long end = Math.Min((long)dataOff + dataSize, b.Length);
