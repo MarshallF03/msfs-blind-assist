@@ -1787,6 +1787,76 @@ public partial class MainForm
         });
     }
 
+    /// <summary>
+    /// Every surroundings tier for one airport, merged into one list. Tiers are appended here
+    /// as they land: navdata (this task), GSX terminals, OSM, scenery. Runs inside
+    /// SurroundingsCatalogCache.Get, i.e. on the hotkey/background thread that asked — a fresh
+    /// GateDataSource per call for the same reason ParkingSpotSupplier builds one.
+    /// </summary>
+    private IReadOnlyList<MSFSBlindAssist.Navigation.Surroundings.AirportFeature> BuildSurroundingsFeatures(string icao)
+    {
+        var provider = airportDataProvider;
+        if (provider == null) return Array.Empty<MSFSBlindAssist.Navigation.Surroundings.AirportFeature>();
+        var features = new List<MSFSBlindAssist.Navigation.Surroundings.AirportFeature>();
+
+        var facilities = (provider as MSFSBlindAssist.Database.IAirportFacilitiesProvider)?.GetAirportFacilities(icao);
+        var named = MSFSBlindAssist.Services.ParkingSpotSource.GetNamedSpots(provider, BuildGateDataSource(), icao);
+        features.AddRange(MSFSBlindAssist.Navigation.Surroundings.NavdataFeatureSource.Read(named, facilities));
+        return features;
+    }
+
+    /// <summary>
+    /// Alt+L (output mode): "Look around." One utterance — the Where-Am-I line, the zone, the
+    /// nearest features with direction and distance. Ground-only like Where Am I.
+    /// </summary>
+    private void AnnounceLookAround()
+    {
+        if (airportDataProvider == null) { announcer.AnnounceImmediate("Airport database not available."); return; }
+        if (!_lastOnGround) { announcer.AnnounceImmediate("In flight."); return; }
+
+        simConnectManager.RequestAircraftPositionAsync(position =>
+        {
+            string announcement;
+            try
+            {
+                var nearby = airportDataProvider.GetNearbyAirportICAOs(position.Latitude, position.Longitude, 5.0)
+                    .Where(c => c != null && c.Length == 4).ToList();
+                if (nearby.Count == 0)
+                {
+                    announcement = "No airport nearby.";
+                }
+                else
+                {
+                    string icao = nearby[0];
+                    string whereAmI = taxiGuidanceManager.DescribeCurrentLocation(airportDataProvider, icao, position.Latitude, position.Longitude);
+                    // AircraftPosition carries degrees (GroundTrafficMonitor adds these two the same way).
+                    double hdgTrue = MSFSBlindAssist.Services.RelativeDirection.Normalize360(position.HeadingMagnetic + position.MagneticVariation);
+                    var catalog = surroundingsCache.Get(icao);
+                    announcement = MSFSBlindAssist.Navigation.Surroundings.SurroundingsReport.Compose(
+                        whereAmI, icao, catalog, position.Latitude, position.Longitude, hdgTrue,
+                        m => MSFSBlindAssist.Services.DistanceFormatter.FromMetres(m));
+                }
+            }
+            catch (Exception ex)
+            {
+                announcement = $"Surroundings lookup failed. {ex.Message}";
+            }
+
+            if (this.InvokeRequired) this.Invoke(() => announcer.AnnounceImmediate(announcement));
+            else announcer.AnnounceImmediate(announcement);
+        });
+    }
+
+    /// <summary>
+    /// Ctrl+Shift+L (output mode): surroundings window. Task 9 replaces this stub with a real
+    /// browsable window; until then it speaks the same one-line readout as Alt+L.
+    /// </summary>
+    private void ShowSurroundingsWindow()
+    {
+        // Task 9 replaces this
+        AnnounceLookAround();
+    }
+
     private void OnTaxiGuidanceStateChanged(object? sender, TaxiGuidanceState newState)
     {
         // DIAGNOSTIC: log state transitions to landing_exit.log so we can correlate

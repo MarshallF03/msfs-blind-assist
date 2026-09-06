@@ -185,6 +185,8 @@ public partial class MainForm : Form
 
     private TaxiGuidanceManager taxiGuidanceManager = null!;
 
+    private readonly MSFSBlindAssist.Services.SurroundingsCatalogCache surroundingsCache = new();
+
     private DockingGuidanceManager dockingGuidanceManager = null!;
 
     private TaxiAssistForm? taxiAssistForm;
@@ -678,6 +680,11 @@ public partial class MainForm : Form
         // it is affordable to ask on every Where-Am-I press.
         taxiGuidanceManager.ParkingSpotVersionSupplier =
             icao => BuildGateDataSource()?.GetGateListVersion(icao) ?? "none";
+
+        // Surroundings catalog: same token as the Where-Am-I graph so a GSX publish re-letters
+        // the inferred concourses too. Built on demand from the hotkey handler, never per frame.
+        surroundingsCache.VersionSupplier = icao => BuildGateDataSource()?.GetGateListVersion(icao) ?? "none";
+        surroundingsCache.FeatureSupplier = BuildSurroundingsFeatures;
         sayIntentionsService = new SayIntentionsService();
 
         // Initialize docking guidance manager
@@ -770,6 +777,7 @@ public partial class MainForm : Form
                 // Real-time: drop any cached graph built from the older (pre-augmentation) data so
                 // Where-Am-I and friends pick up the fresh names on next use — no manual refresh.
                 taxiGuidanceManager?.OnAirportDataUpdated(icao);
+                surroundingsCache.Invalidate(icao);
 
                 try { _taxiAugmentLog.Info($"taxi-augment: data updated for {icao}"); }
                 catch { /* log failure must never surface */ }

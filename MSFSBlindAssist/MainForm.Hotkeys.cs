@@ -400,6 +400,12 @@ public partial class MainForm
             case HotkeyAction.TaxiWhereAmI:
                 AnnounceWhereAmI();
                 break;
+            case HotkeyAction.LookAround:
+                AnnounceLookAround();
+                break;
+            case HotkeyAction.ShowSurroundings:
+                ShowSurroundingsWindow();   // implemented in Task 9; until then a one-line stub calls AnnounceLookAround()
+                break;
             case HotkeyAction.AnnounceGroundTraffic:
                 groundTrafficMonitor.AnnounceNearestTrafficSummary();
                 break;
