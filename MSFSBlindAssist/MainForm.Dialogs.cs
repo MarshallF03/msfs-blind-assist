@@ -738,7 +738,12 @@ public partial class MainForm
                 airportDataProvider!, announcer, taxiGuidanceManager, simConnectManager, tcasService,
                 simConnectManager.AircraftWingSpan, BuildGateDataSource(), BuildGsxGateSelector(), dockingGuidanceManager,
                 importFromSayIntentions: BuildTaxiRouteFromSayIntentionsAsync);
-            taxiAssistForm.SurroundingsCatalogSupplier = icao => surroundingsCache.Get(icao);
+            // Cached-only (never triggers a build on the UI thread) plus a background warm-up
+            // Task the form kicks off itself when nothing is cached yet — see
+            // TaxiAssistForm.SurroundingsCatalogCached/SurroundingsCatalogWarmUp.
+            taxiAssistForm.SurroundingsCatalogCached = icao =>
+                surroundingsCache.TryGetCached(icao, out var cached) ? cached : null;
+            taxiAssistForm.SurroundingsCatalogWarmUp = icao => Task.Run(() => { surroundingsCache.Get(icao); });
         }
 
         return taxiAssistForm;
