@@ -33,6 +33,19 @@ public static class SceneryModelNameClassifier
         (new Regex(@"\b(office|admin|cafe|restaurant)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), FeatureKind.Office),
     };
 
+    // Classify inline regexes hoisted to static readonly (tr-TR IgnoreCase trap fix)
+    private static readonly Regex ConcoursePierSatelliteTerminal = new(
+        @"^(concourse|pier|satellite|terminal)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex TrailingDigits = new(@"^\d{1,2}$", RegexOptions.CultureInvariant);
+
+    // Tokenize inline regexes hoisted to static readonly
+    private static readonly Regex CamelCaseSplit = new(@"(?<=[a-z])(?=[A-Z])", RegexOptions.CultureInvariant);
+
+    // Pretty inline regexes hoisted to static readonly
+    private static readonly Regex AllDigits = new(@"^\d+$", RegexOptions.CultureInvariant);
+    private static readonly Regex DigitsPlusLetter = new(@"^\d+[A-Za-z]$", RegexOptions.CultureInvariant);
+    private static readonly Regex HangerVariant = new(@"^hangers?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
     public static ClassifiedModel? Classify(string modelName, string icao)
     {
         if (string.IsNullOrWhiteSpace(modelName)) return null;
@@ -50,7 +63,7 @@ public static class SceneryModelNameClassifier
         var kept = new List<string>(tokens);
         if (kind is FeatureKind.Concourse or FeatureKind.Terminal)
         {
-            int kw = kept.FindIndex(t => Regex.IsMatch(t, @"^(concourse|pier|satellite|terminal)$", RegexOptions.IgnoreCase));
+            int kw = kept.FindIndex(t => ConcoursePierSatelliteTerminal.IsMatch(t));
             kept = kw >= 0 && kw + 1 < kept.Count ? new List<string> { kept[kw], kept[kw + 1] } : new List<string> { kept[Math.Max(kw, 0)] };
         }
         else
@@ -59,7 +72,7 @@ public static class SceneryModelNameClassifier
             if (kept.Count >= 2 && kept[^1].Length == 1 && char.IsLetter(kept[^1][0]) && kept[^2].Any(char.IsDigit))
                 kept.RemoveAt(kept.Count - 1);
             // Trailing 1–2 digit token: a part number, unless removing it leaves just the kind word.
-            if (kept.Count >= 2 && Regex.IsMatch(kept[^1], @"^\d{1,2}$"))
+            if (kept.Count >= 2 && TrailingDigits.IsMatch(kept[^1]))
             {
                 var without = kept.Take(kept.Count - 1).ToList();
                 bool bareKind = without.Count == 1 && Kinds.Any(x => x.Rx.IsMatch(without[0]));
@@ -77,15 +90,15 @@ public static class SceneryModelNameClassifier
         string s = model.Trim();
         if (!string.IsNullOrEmpty(icao))
             s = Regex.Replace(s, $@"^{Regex.Escape(icao)}\d*[_\- ]?", "", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        s = Regex.Replace(s, @"(?<=[a-z])(?=[A-Z])", " ");                   // HubCafe → Hub Cafe
+        s = CamelCaseSplit.Replace(s, " ");                                    // HubCafe → Hub Cafe
         return s.Split(new[] { '_', '-', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
     }
 
     private static string Pretty(string t)
     {
-        if (Regex.IsMatch(t, @"^\d+$")) return int.Parse(t, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
-        if (Regex.IsMatch(t, @"^\d+[A-Za-z]$")) return int.Parse(t[..^1], CultureInfo.InvariantCulture) + t[^1..].ToUpperInvariant();
-        if (Regex.IsMatch(t, @"^hangers?$", RegexOptions.IgnoreCase)) return "Hangar";
+        if (AllDigits.IsMatch(t)) return int.Parse(t, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
+        if (DigitsPlusLetter.IsMatch(t)) return int.Parse(t[..^1], CultureInfo.InvariantCulture) + t[^1..].ToUpperInvariant();
+        if (HangerVariant.IsMatch(t)) return "Hangar";
         if (t.Length <= 3 && t.All(char.IsUpper)) return t;
         return char.ToUpperInvariant(t[0]) + t[1..].ToLowerInvariant();
     }
