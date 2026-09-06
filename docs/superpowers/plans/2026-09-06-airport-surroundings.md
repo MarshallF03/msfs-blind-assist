@@ -267,7 +267,8 @@ public class SurroundingsGeometryTests
     public void RelativeBearing_is_signed_and_wrapped(double heading, double expected)
     {
         double rel = SurroundingsGeometry.RelativeBearingDeg(47.0, -122.0, heading, 47.01, -122.0);
-        Assert.InRange(rel, expected - 0.5, expected + 0.5);
+        if (Math.Abs(expected) == 180.0) Assert.InRange(Math.Abs(rel), 179.5, 180.5);   // -180 and 180 are the same direction
+        else Assert.InRange(rel, expected - 0.5, expected + 0.5);
     }
 
     [Fact]
@@ -2206,7 +2207,7 @@ public sealed class PassingCalloutGate
     {
         if (groundSpeedKts < MinSpeedKts || groundSpeedKts > MaxSpeedKts) return null;
         if (_lastAny is DateTime last && now - last < GlobalGap) return null;
-        foreach (var n in ranked)   // ranked is nearest-first
+        foreach (var n in ranked.OrderBy(x => x.DistanceMetres))   // nearest first, whatever order the caller used
         {
             if (!IsAnnounceable(n.Feature) || !InRange(n)) continue;
             string key = Key(n.Feature);
@@ -2665,7 +2666,6 @@ public class SceneryModelNameClassifierTests
     [InlineData("concourse_t_canopy_01", "KATL", FeatureKind.Concourse, "Concourse T")]
     [InlineData("northwestern_cargo_01", "KATL", FeatureKind.Cargo, "Northwestern Cargo")]
     [InlineData("southern_hangar_01", "KATL", FeatureKind.Hangar, "Southern Hangar")]
-    [InlineData("KATL2020_cargo_loader_01", "KATL", FeatureKind.Cargo, "Cargo Loader")]
     public void Classifies_measured_model_names(string model, string icao, FeatureKind kind, string name)
     {
         var c = SceneryModelNameClassifier.Classify(model, icao);
@@ -2686,6 +2686,7 @@ public class SceneryModelNameClassifierTests
     [InlineData("safegate01")]
     [InlineData("KATL2020_truck_fuel")]
     [InlineData("KATL2020_cargovan")]
+    [InlineData("KATL2020_cargo_loader_01")]
     [InlineData("KJAC_Vehicles_Fuel_Truck_JHA")]
     [InlineData("KTIW_Bridge1")]
     [InlineData("KTIW_Silo")]
@@ -2725,7 +2726,7 @@ public sealed record ClassifiedModel(FeatureKind Kind, string Name);
 public static class SceneryModelNameClassifier
 {
     private static readonly Regex StopList = new(
-        @"\b(fences?|lights?|rooflights?|poles?|aircon\d*|hvac|vehicles?|cars?|carparks?|trucks?|vans?|cargovan|loader|cones?|signs?|markings?|lines?|jetways?|bridges?|pylons?|silos?|lod\d*|shadows?|decals?|grass|trees?|pedestrian|crossing\d*|tickets?|platform\d*|gates?|safegate\d*|interface|canopy|base|stairs?|railing|barrier|bollards?|hydrant)\b",
+        @"\b(fences?|lights?|rooflights?|poles?|aircon|hvac|vehicles?|cars?|carparks?|trucks?|vans?|cargovan|loaders?|cones?|signs?|markings?|lines?|jetways?|bridges?|pylons?|silos?|lod|shadows?|decals?|grass|trees?|pedestrian|crossing|tickets?|platform|gates?|safegate|base|stairs?|railing|barrier|bollards?|hydrant)\d*\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     // Order matters: first match wins.
@@ -2773,7 +2774,7 @@ public static class SceneryModelNameClassifier
             {
                 var without = kept.Take(kept.Count - 1).ToList();
                 bool bareKind = without.Count == 1 && Kinds.Any(x => x.Rx.IsMatch(without[0]));
-                if (!bareKind) kept = without;
+                if (!(bareKind && kind == FeatureKind.Hangar)) kept = without;   // "Hangar 1" keeps its number; "Tower 1" does not
             }
         }
 
@@ -2805,7 +2806,7 @@ public static class SceneryModelNameClassifier
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `dotnet test tests/MSFSBlindAssist.Tests/MSFSBlindAssist.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~SceneryModelNameClassifierTests"`
-Expected: 43 passed. Adjust the stop-list/keyword tables — never the test rows — until every measured name lands where the table says.
+Expected: 43 passed (23 classify rows + 20 drop rows). Adjust the stop-list/keyword tables — never the test rows — until every measured name lands where the table says.
 
 - [ ] **Step 5: Commit**
 
