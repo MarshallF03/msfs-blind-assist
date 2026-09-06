@@ -68,4 +68,14 @@ public class PassingCalloutGateTests
         gate.Reset();
         Assert.NotNull(gate.Evaluate(new[] { N(conc, 60, 90) }, 10, T0.AddMinutes(7)));
     }
+
+    [Fact]
+    public void Baseline_leaves_an_ahead_feature_unmarked_so_it_speaks_when_it_comes_abeam()
+    {
+        var gate = new PassingCalloutGate();
+        var conc = F(FeatureKind.Concourse, "Concourse B");
+        gate.Baseline(new[] { N(conc, 60, 10) }, T0);                  // dead ahead at pushback: not "seen"
+        Assert.Null(gate.Evaluate(new[] { N(conc, 60, 10) }, 10, T0.AddSeconds(30)));      // still ahead: nothing
+        Assert.Equal("Concourse B", gate.Evaluate(new[] { N(conc, 60, 90) }, 10, T0.AddSeconds(60))?.Feature.Name); // now abeam: speaks
+    }
 }

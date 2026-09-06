@@ -4,8 +4,9 @@ namespace MSFSBlindAssist.Navigation.Surroundings;
 /// Pure decision state for "Passing X, on the left." Fires for one feature per tick at most,
 /// nearest first, only when abeam and inside the kind's radius, inside the taxi speed band,
 /// at most once per feature per five minutes and once globally per ten seconds. Baseline():
-/// anything already in range when the monitor starts is marked as seen — a start-up at the
-/// gate must not recite the terminal. No clock inside: the caller passes `now`.
+/// anything that would fire on this tick is marked as seen — a start-up abeam of the terminal
+/// must not recite it; a terminal AHEAD at pushback is left unmarked so it speaks when it comes
+/// abeam. No clock inside: the caller passes `now`.
 /// </summary>
 public sealed class PassingCalloutGate
 {
@@ -43,7 +44,7 @@ public sealed class PassingCalloutGate
     public void Baseline(IEnumerable<NearbyFeature> inRange, DateTime now)
     {
         foreach (var n in inRange)
-            if (IsAnnounceable(n.Feature) && n.DistanceMetres <= PassRadiusMetres(n.Feature.Kind))
+            if (IsAnnounceable(n.Feature) && InRange(n))
                 _lastByFeature[Key(n.Feature)] = now;
     }
 
