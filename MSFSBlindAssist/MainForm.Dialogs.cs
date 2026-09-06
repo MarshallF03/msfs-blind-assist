@@ -738,6 +738,7 @@ public partial class MainForm
                 airportDataProvider!, announcer, taxiGuidanceManager, simConnectManager, tcasService,
                 simConnectManager.AircraftWingSpan, BuildGateDataSource(), BuildGsxGateSelector(), dockingGuidanceManager,
                 importFromSayIntentions: BuildTaxiRouteFromSayIntentionsAsync);
+            taxiAssistForm.SurroundingsCatalogSupplier = icao => surroundingsCache.Get(icao);
         }
 
         return taxiAssistForm;

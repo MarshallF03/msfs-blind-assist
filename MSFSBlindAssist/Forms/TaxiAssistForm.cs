@@ -1,4 +1,5 @@
-﻿using MSFSBlindAssist.Accessibility;
+﻿using System.ComponentModel;
+using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Database;
 using MSFSBlindAssist.Database.Models;
 using MSFSBlindAssist.Navigation;
@@ -304,6 +305,13 @@ public class TaxiAssistForm : Form
     // actual ParkingSpot to GsxRemoteGateSelector without re-querying the data provider.
     private Dictionary<string, ParkingSpot> _destinationSpotMap = new();
 
+    /// <summary>
+    /// The surroundings catalog for an ICAO (MainForm wires SurroundingsCatalogCache.Get). Null
+    /// keeps the "Place" destination list empty, which is announced, never silent.
+    /// </summary>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Func<string, Navigation.Surroundings.AirportFeatureCatalog?>? SurroundingsCatalogSupplier { get; set; }
+
     // Gate-branch cache (Fix: per-keystroke gate-list rebuild). PopulateDestinations
     // runs on every txtGateSearch keystroke, every chkFitFilter toggle, and on each
     // dest-type change. The expensive work in the GATE branch — GateDataSource.GetGates
@@ -491,7 +499,7 @@ public class TaxiAssistForm : Form
             AccessibleName = "Destination type",
             AccessibleDescription = "Select whether to taxi to a runway, a gate/parking position, a progressive taxi (route to a hold short or across a runway), or a deice area"
         };
-        cmbDestType.Items.AddRange(new object[] { "Runway", "Gate / Parking", "Progressive Taxi", "Deice Area" });
+        cmbDestType.Items.AddRange(new object[] { "Runway", "Gate / Parking", "Progressive Taxi", "Deice Area", "Place" });
         cmbDestType.SelectedIndex = 0;
         cmbDestType.SelectedIndexChanged += OnDestTypeChanged;
         y += 30;
@@ -2202,6 +2210,7 @@ public class TaxiAssistForm : Form
 
         bool isRunway = cmbDestType.SelectedIndex == 0;
         bool isDeice = cmbDestType.SelectedIndex == 3;
+        bool isPlace = cmbDestType.SelectedIndex == 4;
 
         if (isRunway)
         {
@@ -2382,6 +2391,51 @@ public class TaxiAssistForm : Form
                 _destinationThresholdMap[label] = (targetLat, targetLon);
                 _destinationSpotMap[label] = spot;
                 cmbDestination.Items.Add(label);
+            }
+        }
+        else if (isPlace)
+        {
+            // PLACE path: FBOs, hangars, fuel, terminals, cargo from the surroundings catalog,
+            // each RESOLVED onto navdata pavement by FeatureDestinationResolver (a stand within
+            // 150 m, else a taxi node within 100 m). Fills the same maps as the gate and deice
+            // branches so Calculate, LoadRoute and docking need no Place-specific code. A feature
+            // that resolves to nothing is not listed — there is no way to taxi to it.
+            var catalog = SurroundingsCatalogSupplier?.Invoke(_currentIcao);
+            if (catalog != null)
+            {
+                var named = Services.ParkingSpotSource.GetNamedSpots(_dataProvider, _gateSource, _currentIcao);
+                Navigation.Surroundings.NearestNode? Nearest(double lat, double lon)
+                {
+                    var n = _graph.FindNearestNode(lat, lon);
+                    if (n == null) return null;
+                    return new Navigation.Surroundings.NearestNode(n.NodeId, n.Latitude, n.Longitude,
+                        TaxiGraph.CalculateDistanceMeters(n.Latitude, n.Longitude, lat, lon));
+                }
+
+                foreach (var feature in catalog.Features.Where(f => Navigation.Surroundings.FeatureDestinationResolver.IsRoutable(f.Kind))
+                                                        .OrderBy(f => f.SpokenName, StringComparer.OrdinalIgnoreCase))
+                {
+                    var dest = Navigation.Surroundings.FeatureDestinationResolver.Resolve(feature, named, Nearest);
+                    if (dest == null) continue;
+
+                    int nodeId = dest.NodeId;
+                    if (dest.Spot != null)
+                    {
+                        var nearNode = _graph.FindNearestNode(dest.Lat, dest.Lon);
+                        if (nearNode == null) continue;
+                        if (TaxiGraph.CalculateDistanceMeters(nearNode.Latitude, nearNode.Longitude, dest.Lat, dest.Lon) > 100.0) continue;
+                        nodeId = nearNode.NodeId;
+                    }
+
+                    string label = Navigation.Surroundings.FeatureDestinationResolver.Label(dest);
+                    if (_destinationNodeMap.ContainsKey(label)) continue;
+                    _destinationNodeMap[label] = nodeId;
+                    _destinationHeadingMap[label] = dest.HeadingDeg;
+                    _destinationHeadingTrueMap[label] = dest.HeadingDeg;
+                    _destinationThresholdMap[label] = (dest.Lat, dest.Lon);
+                    if (dest.Spot != null) _destinationSpotMap[label] = dest.Spot;
+                    cmbDestination.Items.Add(label);
+                }
             }
         }
         else
@@ -2799,6 +2853,9 @@ public class TaxiAssistForm : Form
         // knows before pressing Calculate that the airport has nothing to route to.
         if (cmbDestType.SelectedIndex == 3 && cmbDestination.Items.Count == 0)
             _announcer.AnnounceImmediate("No deicing areas at this airport.");
+
+        if (cmbDestType.SelectedIndex == 4 && cmbDestination.Items.Count == 0)
+            _announcer.AnnounceImmediate($"No places to route to at {_currentIcao}. Open Alt+L to hear what is around you.");
 
         // Entering gate mode: kick a traffic sweep and rebuild once it lands, so the
         // occupied-stand filter works on the first list rather than only after the pilot
