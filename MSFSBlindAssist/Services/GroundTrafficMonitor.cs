@@ -307,7 +307,7 @@ public sealed class GroundTrafficMonitor : IDisposable
                 ac.CurrentZone = newZone;
                 ac.LastAlertTime = DateTime.UtcNow;
 
-                string dir = DescribeDirection(relBearing);
+                string dir = RelativeDirection.Describe(relBearing);
                 string distStr = FormatDistance(distFt, useMetres);
 
                 string announcement = newZone switch
@@ -376,7 +376,7 @@ public sealed class GroundTrafficMonitor : IDisposable
         var sb = new System.Text.StringBuilder($"{countWord} nearby. ");
         foreach (var (distFt, ac, relBearing) in list)
         {
-            string dir = DescribeDirection(relBearing);
+            string dir = RelativeDirection.Describe(relBearing);
             string distStr = FormatDistance(distFt, useMetres);
             string label = !string.IsNullOrEmpty(ac.Callsign) ? ac.Callsign : "traffic";
             sb.Append($"{label}, {dir}, {distStr}. ");
@@ -459,19 +459,6 @@ public sealed class GroundTrafficMonitor : IDisposable
     {
         double step = feet > 200.0 ? 50.0 : 25.0;
         return (int)(Math.Round(feet / step) * step);
-    }
-
-    private static string DescribeDirection(double relBearing)
-    {
-        // relBearing: 0 = dead ahead, 90 = hard right, 180 = dead behind
-        bool right = relBearing < 180.0;
-        double abs = right ? relBearing : (360.0 - relBearing);
-
-        if (abs <= 20.0) return "ahead";
-        if (abs <= 70.0) return right ? "ahead and to the right" : "ahead and to the left";
-        if (abs <= 110.0) return right ? "to the right" : "to the left";
-        if (abs <= 160.0) return right ? "behind and to the right" : "behind and to the left";
-        return "behind";
     }
 
     private static double NormalizeDeg(double d) => ((d % 360.0) + 360.0) % 360.0;
