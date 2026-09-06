@@ -82,7 +82,8 @@ public partial class MainForm
 
         using var dlg = new Forms.Settings.SettingsForm(
             refreshTaxiwayNames: refreshCallback,
-            vatsimStatus: () => vatsimService?.GetStatus());
+            vatsimStatus: () => vatsimService?.GetStatus(),
+            sceneryIndexStatus: () => sceneryIndexer.LastStatus);
         if (dlg.ShowDialog(this) == DialogResult.OK)
         {
             ApplyRuntimeSettings();

@@ -405,6 +405,12 @@ public class UserSettings
         public bool TaxiAugmentEnabled { get; set; } = true;
 
         /// <summary>
+        /// Read the installed scenery package's placement BGLs for named buildings (hangars,
+        /// concourses, tower…) at add-on airports. Offline; cached under %APPDATA%\MSFSBlindAssist\scenery-index.
+        /// </summary>
+        public bool SceneryIndexEnabled { get; set; } = true;
+
+        /// <summary>
         /// Ground-speed announcement cadence used WHILE TAKEOFF ASSIST IS ACTIVE,
         /// applied by the global <see cref="Services.GroundSpeedAnnouncer"/> (NOT a
         /// separate announcer). Sentinel-encoded:
@@ -634,6 +640,7 @@ public class UserSettings
             TaxiGuidanceAnnounceCrossings = TaxiGuidanceAnnounceCrossings,
             TaxiGuidanceGroundSpeedAnnounceInterval = TaxiGuidanceGroundSpeedAnnounceInterval,
             TaxiAugmentEnabled = TaxiAugmentEnabled,
+            SceneryIndexEnabled = SceneryIndexEnabled,
             TakeoffAssistGroundSpeedAnnounceInterval = TakeoffAssistGroundSpeedAnnounceInterval,
             Hs787CommunityFolderOverride = Hs787CommunityFolderOverride,
             Hs787SimVersionOverride = Hs787SimVersionOverride,

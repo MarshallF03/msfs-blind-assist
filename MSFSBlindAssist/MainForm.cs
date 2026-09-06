@@ -48,6 +48,11 @@ public partial class MainForm : Form
     // Typed reference to the augmentation decorator so Phase 6 can call PrefetchAsync.
     private MSFSBlindAssist.Services.TaxiAugment.AugmentingAirportDataProvider? _augmentingProvider;
 
+    // Tier 3 of the surroundings feature: reads the installed scenery package's placement
+    // BGLs for named buildings, cached on disk per package under %APPDATA%.
+    private readonly MSFSBlindAssist.Services.SceneryIndex.SceneryPackageIndexer sceneryIndexer =
+        new(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MSFSBlindAssist", "scenery-index"));
+
     private ChecklistForm? checklistForm;
 
     private FenixMonitorManagerForm? fenixMonitorManagerForm;

@@ -1804,6 +1804,11 @@ public partial class MainForm
         features.AddRange(MSFSBlindAssist.Navigation.Surroundings.NavdataFeatureSource.Read(named, facilities));
         if (_augmentingProvider != null)
             features.AddRange(_augmentingProvider.GetOnlineFeatures(icao, facilities));
+        if (MSFSBlindAssist.Settings.SettingsManager.Current.SceneryIndexEnabled && facilities != null)
+        {
+            var dirs = MSFSBlindAssist.Services.SceneryIndex.SceneryPackageLocator.PackageDirs(facilities.SceneryLocalPath, System.IO.Directory.Exists);
+            features.AddRange(sceneryIndexer.GetFeatures(icao, dirs));
+        }
         return features;
     }
 

@@ -47,10 +47,16 @@ public class TaxiGuidancePanel : UserControl, ISettingsPanel
     private Label sayIntentionsHeadingLabel = null!;
     private CheckBox sayIntentionsAutoStartCheckBox = null!;
     private Label taxiAugmentAttributionLabel = null!;
+    private CheckBox sceneryIndexEnabledCheckBox = null!;
+    private TextBox sceneryIndexStatusTextBox = null!;
 
     // Optional callback for the manual taxiway-names refresh. Null when the caller doesn't
     // supply augmenting-provider support — the button disables itself in that case.
     private readonly Func<Task>? _onRefreshTaxiwayNames;
+
+    // Optional supplier for the scenery indexer's last-run status line (package name, feature
+    // count, placement/base-library counts) — read once when the panel loads, never polled.
+    private readonly Func<string>? _sceneryIndexStatus;
 
     // Four seconds of tone at TestTonePlayer's 100 ms tick — the steering tone is what the
     // pilot will be following for a whole taxi, so its preview is deliberately longer than the
@@ -68,9 +74,10 @@ public class TaxiGuidancePanel : UserControl, ISettingsPanel
 
     public string TabTitle => "Taxi Guidance";
 
-    public TaxiGuidancePanel(Func<Task>? refreshTaxiwayNames)
+    public TaxiGuidancePanel(Func<Task>? refreshTaxiwayNames, Func<string>? sceneryIndexStatus = null)
     {
         _onRefreshTaxiwayNames = refreshTaxiwayNames;
+        _sceneryIndexStatus = sceneryIndexStatus;
         InitializeComponent();
         SetupAccessibility();
     }
@@ -432,13 +439,40 @@ public class TaxiGuidancePanel : UserControl, ISettingsPanel
             AccessibleName = "Online taxiway name data attribution"
         };
 
+        // Reads the installed scenery package on disk for named buildings (hangars,
+        // concourses, tower…) at add-on airports, offline, cached under %APPDATA%.
+        // Placed after the online-names attribution rather than a "callouts" checkbox that
+        // does not exist on this panel yet — leave room below for one.
+        sceneryIndexEnabledCheckBox = new CheckBox
+        {
+            Text = "Read installed scenery for airport buildings (offline)",
+            Location = new Point(20, 815),
+            Size = new Size(450, 40),
+            AccessibleName = "Read installed scenery for airport buildings (offline)",
+            AccessibleDescription = "When enabled, reads the add-on airport package on disk for named "
+                + "hangars, concourses, the tower and other modeled buildings and includes them in the "
+                + "surroundings readout. No network use. Applies on the next airport."
+        };
+
+        // Read-only status readout for the scenery indexer's last run — a Label is not in the
+        // tab order (CLAUDE.md VATSIM rule: status/diagnostic text must be a TextBox so a
+        // screen-reader user can tab to it instead of hunting with the review cursor).
+        sceneryIndexStatusTextBox = new TextBox
+        {
+            Location = new Point(20, 858),
+            Size = new Size(450, 44),
+            ReadOnly = true,
+            Multiline = true,
+            AccessibleName = "Scenery index status"
+        };
+
         // SayIntentions route import. It lives here rather than on a tab of its own:
         // the setting decides what happens to a TAXI ROUTE, which is this tab's
         // subject, and it was the only option left once the API key was retired.
         sayIntentionsHeadingLabel = new Label
         {
             Text = "SayIntentions",
-            Location = new Point(20, 830),
+            Location = new Point(20, 930),
             Size = new Size(450, 20),
             AccessibleName = "SayIntentions section"
         };
@@ -452,7 +486,7 @@ public class TaxiGuidancePanel : UserControl, ISettingsPanel
         sayIntentionsAutoStartCheckBox = new CheckBox
         {
             Text = "SayIntentions import starts taxi &guidance immediately",
-            Location = new Point(20, 855),
+            Location = new Point(20, 955),
             Size = new Size(450, 40),
             AccessibleName = "SayIntentions import starts taxi guidance immediately",
             AccessibleDescription = "When checked, a SayIntentions import starts guidance immediately "
@@ -475,6 +509,7 @@ public class TaxiGuidancePanel : UserControl, ISettingsPanel
             dockingGroup,
             refreshTaxiwayNamesButton,
             taxiAugmentEnabledCheckBox, taxiAugmentAttributionLabel,
+            sceneryIndexEnabledCheckBox, sceneryIndexStatusTextBox,
             sayIntentionsHeadingLabel,
             sayIntentionsAutoStartCheckBox
         });
@@ -505,6 +540,8 @@ public class TaxiGuidancePanel : UserControl, ISettingsPanel
         dockingSpeedCalloutsCheckBox.TabIndex = 4;
         refreshTaxiwayNamesButton.TabIndex = tabIdx++;
         taxiAugmentEnabledCheckBox.TabIndex = tabIdx++;
+        sceneryIndexEnabledCheckBox.TabIndex = tabIdx++;
+        sceneryIndexStatusTextBox.TabIndex = tabIdx++;
         sayIntentionsAutoStartCheckBox.TabIndex = tabIdx++;
     }
 
@@ -659,6 +696,8 @@ public class TaxiGuidancePanel : UserControl, ISettingsPanel
         dockingBeepVolumeValueLabel.Text = $"{dockingBeepVolumeTrackBar.Value}%";
 
         taxiAugmentEnabledCheckBox.Checked = settings.TaxiAugmentEnabled;
+        sceneryIndexEnabledCheckBox.Checked = settings.SceneryIndexEnabled;
+        sceneryIndexStatusTextBox.Text = _sceneryIndexStatus?.Invoke() ?? "";
         sayIntentionsAutoStartCheckBox.Checked = settings.SayIntentionsAutoStartTaxiGuidance;
     }
 
@@ -701,6 +740,7 @@ public class TaxiGuidancePanel : UserControl, ISettingsPanel
         settings.DockingBeepVolume = dockingBeepVolumeTrackBar.Value / 100.0;
 
         settings.TaxiAugmentEnabled = taxiAugmentEnabledCheckBox.Checked;
+        settings.SceneryIndexEnabled = sceneryIndexEnabledCheckBox.Checked;
         settings.SayIntentionsAutoStartTaxiGuidance = sayIntentionsAutoStartCheckBox.Checked;
     }
 
