@@ -328,6 +328,17 @@ public class TaxiAssistForm : Form
     // is already in flight (mirrors AirportSurroundingsMonitor's single _buildInFlight bool).
     private string? _placesWarmingIcao;
 
+    // Set to the ICAO a Place-list warm-up has already COMPLETED for, in this form's lifetime —
+    // regardless of whether that warm-up actually landed a catalog. Without this, a catalog
+    // build that keeps failing (SurroundingsCatalogCache.Get swallows and never caches on
+    // failure) let every re-entrant PopulateDestinations() see catalog == null with the warming
+    // guard reset, start a NEW warm-up, and re-announce "Loading places for {icao}." forever —
+    // a self-perpetuating loop stomping its own "No places…" follow-up. A warm-up may start only
+    // when this does NOT match _currentIcao; cleared alongside _placesWarmingIcao whenever a
+    // different airport (or gate-list token) is loaded, so a genuinely new airport still gets
+    // one warm-up attempt.
+    private string? _placesWarmedIcao;
+
     // Gate-branch cache (Fix: per-keystroke gate-list rebuild). PopulateDestinations
     // runs on every txtGateSearch keystroke, every chkFitFilter toggle, and on each
     // dest-type change. The expensive work in the GATE branch — GateDataSource.GetGates
@@ -2004,6 +2015,12 @@ public class TaxiAssistForm : Form
         // makes the caller's "no taxi path data available" guard do its job, and every
         // _graph == null path in this form already early-returns.
         _graph = null;
+
+        // A new airport (or gate-list token change) is being loaded — the Place warm-up
+        // guards are per-ICAO-lifetime and must not carry over from whatever airport was
+        // loaded before, or a genuinely new airport would never get its own warm-up attempt.
+        _placesWarmingIcao = null;
+        _placesWarmedIcao = null;
         _graphSourceToken = "";
         // Invalidate the gate-branch resolution cache — the new airport has a
         // different graph + parking layout. The cache is also re-validated by
@@ -2423,25 +2440,44 @@ public class TaxiAssistForm : Form
             // background warm-up via SurroundingsCatalogWarmUp and repopulate once it lands —
             // the list stays empty for THIS pass, mirroring AirportSurroundingsMonitor's
             // cached-or-one-background-build pattern.
+            //
+            // A warm-up may start only ONCE per ICAO for this form's lifetime — guarded by
+            // _placesWarmedIcao, not just "no warm-up currently in flight". Without the
+            // already-warmed check, a catalog build that keeps failing (Get swallows and never
+            // caches on failure) would let every re-entrant call here see catalog == null with
+            // the in-flight guard freshly cleared, start a NEW warm-up, and re-announce "Loading
+            // places for {icao}." forever — a self-perpetuating loop that stomps its own
+            // "No places…" follow-up every time. One failed attempt is enough to conclude there
+            // is nothing to list; the pilot is told once and the list simply stays empty after
+            // that until a different airport is loaded.
             var catalog = SurroundingsCatalogCached?.Invoke(_currentIcao);
             if (catalog == null)
             {
-                if (SurroundingsCatalogWarmUp != null && _placesWarmingIcao == null && IsHandleCreated)
+                bool alreadyWarmed = string.Equals(_placesWarmedIcao, _currentIcao, StringComparison.OrdinalIgnoreCase);
+                if (SurroundingsCatalogWarmUp != null && _placesWarmingIcao == null && !alreadyWarmed && IsHandleCreated)
                 {
                     string icaoAtStart = _currentIcao;
                     _placesWarmingIcao = icaoAtStart;
                     _announcer.Announce($"Loading places for {icaoAtStart}.");
                     SurroundingsCatalogWarmUp(icaoAtStart).ContinueWith(_ =>
                     {
+                        // Recorded FIRST, before the BeginInvoke attempt below — a thrown
+                        // BeginInvoke (form closing mid-warm-up) must never leave the
+                        // in-flight guard armed forever, and this ICAO must count as
+                        // "warmed" (attempted) regardless of whether the marshal succeeds.
+                        _placesWarmedIcao = icaoAtStart;
+                        _placesWarmingIcao = null;
                         try
                         {
                             BeginInvoke(new Action(() =>
                             {
-                                _placesWarmingIcao = null;
                                 if (IsDisposed) return;
                                 if (cmbDestType.SelectedIndex == 4
                                     && string.Equals(icaoAtStart, _currentIcao, StringComparison.OrdinalIgnoreCase))
                                 {
+                                    // _placesWarmedIcao now matches _currentIcao, so this
+                                    // re-entrant PopulateDestinations() will NOT start another
+                                    // warm-up even if the catalog is still null.
                                     PopulateDestinations();
                                     AnnouncePlacesReady();
                                 }
