@@ -416,11 +416,11 @@ public class TaxiGuidancePanel : UserControl, ISettingsPanel
         // Online taxiway/gate-name augmentation enable toggle.
         taxiAugmentEnabledCheckBox = new CheckBox
         {
-            Text = "Online taxiway and gate names (OpenStreetMap + X-Plane)",
+            Text = "Online taxiway, gate and airport building names (OpenStreetMap + X-Plane)",
             Location = new Point(20, 755),
             Size = new Size(450, 25),
-            AccessibleName = "Online taxiway and gate names",
-            AccessibleDescription = "When enabled, fetches real-world taxiway and gate names from OpenStreetMap and the X-Plane Scenery Gateway to enrich your navdata, on demand for departure and destination. Disable to use navdata names only with no online requests. Applies immediately."
+            AccessibleName = "Online taxiway, gate and airport building names",
+            AccessibleDescription = "When enabled, fetches real-world taxiway and gate names, and airport buildings such as terminals, hangars, the tower and fuel, from OpenStreetMap and the X-Plane Scenery Gateway for the departure and destination. Disable to use navdata only with no online requests. Applies immediately."
         };
 
         // ODbL / source attribution (required for OSM-derived data).

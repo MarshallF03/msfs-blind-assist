@@ -1802,6 +1802,8 @@ public partial class MainForm
         var facilities = (provider as MSFSBlindAssist.Database.IAirportFacilitiesProvider)?.GetAirportFacilities(icao);
         var named = MSFSBlindAssist.Services.ParkingSpotSource.GetNamedSpots(provider, BuildGateDataSource(), icao);
         features.AddRange(MSFSBlindAssist.Navigation.Surroundings.NavdataFeatureSource.Read(named, facilities));
+        if (_augmentingProvider != null)
+            features.AddRange(_augmentingProvider.GetOnlineFeatures(icao, facilities));
         return features;
     }
 
