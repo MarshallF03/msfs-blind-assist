@@ -1791,7 +1791,11 @@ public partial class MainForm
     /// <summary>
     /// Every surroundings tier for one airport, merged into one list. Tiers are appended here
     /// as they land: navdata (this task), GSX terminals, OSM, scenery. Runs inside
-    /// SurroundingsCatalogCache.Get, i.e. on the hotkey/background thread that asked — a fresh
+    /// SurroundingsCatalogCache.Get — which a first-time scenery scan and DB read can make slow
+    /// (Directory.EnumerateFiles + File.ReadAllBytes over every BGL in a package, under a lock) —
+    /// so every caller reaches this on a THREAD-POOL thread (a Task.Run started by the Alt+L /
+    /// Ctrl+Shift+L hotkey handlers, or by AirportSurroundingsMonitor's own background build).
+    /// NEVER on the UI thread and NEVER from a per-frame position update — a fresh
     /// GateDataSource per call for the same reason ParkingSpotSupplier builds one.
     /// </summary>
     private IReadOnlyList<MSFSBlindAssist.Navigation.Surroundings.AirportFeature> BuildSurroundingsFeatures(string icao)
@@ -1824,34 +1828,42 @@ public partial class MainForm
 
         simConnectManager.RequestAircraftPositionAsync(position =>
         {
-            string announcement;
-            try
+            // position is a struct copy handed to us by the SimConnect callback (dispatched on
+            // the UI thread via WndProc). Capture it and run the whole lookup — nearby-ICAO,
+            // DescribeCurrentLocation, and surroundingsCache.Get (a first-time scenery scan/DB
+            // read) — on a thread-pool thread, or a first uncached scan stalls the WinForms
+            // message pump: every hotkey, taxi-guidance tone update and queued announcement.
+            // Marshal only the final announcement back to the UI thread.
+            Task.Run(() =>
             {
-                var nearby = airportDataProvider.GetNearbyAirportICAOs(position.Latitude, position.Longitude, 5.0)
-                    .Where(c => c != null && c.Length == 4).ToList();
-                if (nearby.Count == 0)
+                string announcement;
+                try
                 {
-                    announcement = "No airport nearby.";
+                    var nearby = airportDataProvider.GetNearbyAirportICAOs(position.Latitude, position.Longitude, 5.0)
+                        .Where(c => c != null && c.Length == 4).ToList();
+                    if (nearby.Count == 0)
+                    {
+                        announcement = "No airport nearby.";
+                    }
+                    else
+                    {
+                        string icao = nearby[0];
+                        string whereAmI = taxiGuidanceManager.DescribeCurrentLocation(airportDataProvider, icao, position.Latitude, position.Longitude);
+                        // AircraftPosition carries degrees (GroundTrafficMonitor adds these two the same way).
+                        double hdgTrue = MSFSBlindAssist.Services.RelativeDirection.Normalize360(position.HeadingMagnetic + position.MagneticVariation);
+                        var catalog = surroundingsCache.Get(icao);
+                        announcement = MSFSBlindAssist.Navigation.Surroundings.SurroundingsReport.Compose(
+                            whereAmI, icao, catalog, position.Latitude, position.Longitude, hdgTrue,
+                            m => MSFSBlindAssist.Services.DistanceFormatter.FromMetres(m));
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    string icao = nearby[0];
-                    string whereAmI = taxiGuidanceManager.DescribeCurrentLocation(airportDataProvider, icao, position.Latitude, position.Longitude);
-                    // AircraftPosition carries degrees (GroundTrafficMonitor adds these two the same way).
-                    double hdgTrue = MSFSBlindAssist.Services.RelativeDirection.Normalize360(position.HeadingMagnetic + position.MagneticVariation);
-                    var catalog = surroundingsCache.Get(icao);
-                    announcement = MSFSBlindAssist.Navigation.Surroundings.SurroundingsReport.Compose(
-                        whereAmI, icao, catalog, position.Latitude, position.Longitude, hdgTrue,
-                        m => MSFSBlindAssist.Services.DistanceFormatter.FromMetres(m));
+                    announcement = $"Surroundings lookup failed. {ex.Message}";
                 }
-            }
-            catch (Exception ex)
-            {
-                announcement = $"Surroundings lookup failed. {ex.Message}";
-            }
 
-            if (this.InvokeRequired) this.Invoke(() => announcer.AnnounceImmediate(announcement));
-            else announcer.AnnounceImmediate(announcement);
+                SafeBeginInvoke(() => announcer.AnnounceImmediate(announcement));
+            });
         });
     }
 
@@ -1867,41 +1879,61 @@ public partial class MainForm
 
         simConnectManager.RequestAircraftPositionAsync(position =>
         {
-            IReadOnlyList<MSFSBlindAssist.Services.SayIntentions.InfoSection>? sections = null;
-            string? failure = null;
-            string icao = "";
-            try
+            // Same reasoning as AnnounceLookAround: capture the position (a struct copy handed
+            // to us on the UI thread) and run the whole lookup, including surroundingsCache.Get's
+            // possible first-time scenery scan/DB read, off the UI thread. Only the window Show()
+            // is marshalled back.
+            Task.Run(() =>
             {
-                var nearby = airportDataProvider.GetNearbyAirportICAOs(position.Latitude, position.Longitude, 5.0)
-                    .Where(c => c != null && c.Length == 4).ToList();
-                if (nearby.Count == 0) failure = "No airport nearby.";
-                else
+                IReadOnlyList<MSFSBlindAssist.Services.SayIntentions.InfoSection>? sections = null;
+                string? failure = null;
+                string icao = "";
+                try
                 {
-                    icao = nearby[0];
-                    var catalog = surroundingsCache.Get(icao);
-                    if (catalog == null || catalog.Features.Count == 0) failure = $"No surroundings data for {icao}.";
+                    var nearby = airportDataProvider.GetNearbyAirportICAOs(position.Latitude, position.Longitude, 5.0)
+                        .Where(c => c != null && c.Length == 4).ToList();
+                    if (nearby.Count == 0) failure = "No airport nearby.";
                     else
                     {
-                        var facilities = (airportDataProvider as MSFSBlindAssist.Database.IAirportFacilitiesProvider)?.GetAirportFacilities(icao);
-                        double hdgTrue = MSFSBlindAssist.Services.RelativeDirection.Normalize360(position.HeadingMagnetic + position.MagneticVariation);
-                        sections = MSFSBlindAssist.Navigation.Surroundings.SurroundingsReport.BuildSections(
-                            icao, catalog, facilities?.DescribeFacts() ?? "", position.Latitude, position.Longitude, hdgTrue,
-                            m => MSFSBlindAssist.Services.DistanceFormatter.FromMetres(m));
+                        icao = nearby[0];
+                        var catalog = surroundingsCache.Get(icao);
+                        if (catalog == null || catalog.Features.Count == 0) failure = $"No surroundings data for {icao}.";
+                        else
+                        {
+                            var facilities = (airportDataProvider as MSFSBlindAssist.Database.IAirportFacilitiesProvider)?.GetAirportFacilities(icao);
+                            double hdgTrue = MSFSBlindAssist.Services.RelativeDirection.Normalize360(position.HeadingMagnetic + position.MagneticVariation);
+                            sections = MSFSBlindAssist.Navigation.Surroundings.SurroundingsReport.BuildSections(
+                                icao, catalog, facilities?.DescribeFacts() ?? "", position.Latitude, position.Longitude, hdgTrue,
+                                m => MSFSBlindAssist.Services.DistanceFormatter.FromMetres(m));
+                        }
                     }
                 }
-            }
-            catch (Exception ex) { failure = $"Surroundings lookup failed. {ex.Message}"; }
+                catch (Exception ex) { failure = $"Surroundings lookup failed. {ex.Message}"; }
 
-            void Show()
-            {
-                if (failure != null) { announcer.AnnounceImmediate(failure); return; }
-                try { surroundingsForm?.Close(); } catch { }
-                surroundingsForm = new MSFSBlindAssist.Forms.SayIntentionsInfoForm(sections!, null, $"Surroundings at {icao}");
-                surroundingsForm.FormClosed += (_, _) => surroundingsForm = null;
-                surroundingsForm.Show();
-            }
-            if (this.InvokeRequired) this.BeginInvoke(Show); else Show();
+                void Show()
+                {
+                    if (failure != null) { announcer.AnnounceImmediate(failure); return; }
+                    try { surroundingsForm?.Close(); } catch { }
+                    surroundingsForm = new MSFSBlindAssist.Forms.SayIntentionsInfoForm(sections!, null, $"Surroundings at {icao}");
+                    surroundingsForm.FormClosed += (_, _) => surroundingsForm = null;
+                    surroundingsForm.Show();
+                }
+                SafeBeginInvoke(Show);
+            });
         });
+    }
+
+    /// <summary>
+    /// Marshal to the UI thread, tolerating the form being torn down between the
+    /// IsHandleCreated check and the BeginInvoke — the surroundings lookup runs on a thread-pool
+    /// thread (Task.Run), so an app shutdown or aircraft swap mid-lookup must not throw there
+    /// (unobserved). Same pattern as FBWA380MCDUForm.SafeBeginInvoke.
+    /// </summary>
+    private void SafeBeginInvoke(Action action)
+    {
+        // ObjectDisposedException derives from InvalidOperationException, so one catch covers both.
+        try { if (IsHandleCreated && !IsDisposed) BeginInvoke(action); }
+        catch (InvalidOperationException) { }
     }
 
     private void OnTaxiGuidanceStateChanged(object? sender, TaxiGuidanceState newState)

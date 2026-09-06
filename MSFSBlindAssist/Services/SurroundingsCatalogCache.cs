@@ -7,8 +7,11 @@ namespace MSFSBlindAssist.Services;
 /// One AirportFeatureCatalog per ICAO. Same invalidation shape as TaxiGuidanceManager's
 /// Where-Am-I graph cache: a version token compared through GateDataSource.ShouldRebuildGateList
 /// (rebuild on upgrade/refresh, never on a transient GSX downgrade) plus explicit Invalidate()
-/// from the augmentation fetch. Get() may build, so call it from a hotkey handler or a
-/// background thread — never from a per-frame position update.
+/// from the augmentation fetch. Get() may build — including a first-time scenery scan/DB read
+/// under a lock — so it must run on a thread-pool thread (a hotkey handler's own Task.Run, or
+/// a background build kicked off from a timer tick), NEVER on the UI thread and NEVER from a
+/// per-frame position update. TryGetCached() is the non-building counterpart for a UI-thread
+/// timer that must not itself trigger that build.
 /// </summary>
 public sealed class SurroundingsCatalogCache
 {
@@ -45,6 +48,32 @@ public sealed class SurroundingsCatalogCache
         lock (_lock) _byIcao[icao] = built;
         Log.Debug("Surroundings", $"catalog {icao}: {built.Features.Count} features, token={token}");
         return built;
+    }
+
+    /// <summary>
+    /// A non-building read: true and <paramref name="catalog"/> set only when a catalog for
+    /// <paramref name="icao"/> is already cached AND not stale under the same
+    /// GateDataSource.ShouldRebuildGateList staleness check <see cref="Get"/> applies — never
+    /// calls FeatureSupplier. For a caller (AirportSurroundingsMonitor's UI-thread timer tick)
+    /// that must never trigger the possibly-slow first-time scenery scan/DB read itself; it
+    /// kicks off that build on a thread-pool thread instead and revisits this on a later tick.
+    /// </summary>
+    public bool TryGetCached(string icao, out AirportFeatureCatalog? catalog)
+    {
+        catalog = null;
+        if (string.IsNullOrWhiteSpace(icao)) return false;
+        string token;
+        try { token = VersionSupplier?.Invoke(icao) ?? "none"; } catch { token = "none"; }
+
+        lock (_lock)
+        {
+            if (_byIcao.TryGetValue(icao, out var cached) && !GateDataSource.ShouldRebuildGateList(cached.Version, token))
+            {
+                catalog = cached;
+                return true;
+            }
+        }
+        return false;
     }
 
     public void Invalidate(string icao)

@@ -10,8 +10,10 @@ namespace MSFSBlindAssist.Services;
 /// Opt-in "Passing Concourse B, on the left." Polls own position every 2 s on the UI-thread
 /// timer (same shape as GroundTrafficMonitor — the taxi position stream is taxi-scoped and
 /// is OFF when no route is loaded, so this cannot ride it). Resolves the airport at most every
-/// 30 s, reads the catalog from the cache (a build there is bounded and off the hot path:
-/// once per airport), and hands the ranked list to the pure gate. Queued speech only.
+/// 30 s, reads the catalog from the cache via the non-building TryGetCached (a first build for
+/// an airport is kicked off on a thread-pool thread and picked up on a later tick — never built
+/// synchronously on this UI-thread timer), and hands the ranked list to the pure gate. Queued
+/// speech only.
 /// </summary>
 public sealed class AirportSurroundingsMonitor : IDisposable
 {
@@ -28,6 +30,7 @@ public sealed class AirportSurroundingsMonitor : IDisposable
     private string _icao = "";
     private DateTime _icaoAt = DateTime.MinValue;
     private bool _baselined;
+    private volatile bool _buildInFlight;
 
     public bool Enabled { get; set; }
     /// <summary>True while callouts must stay silent (takeoff assist, rollout, docking, lineup/hold, announcer suppressed).</summary>
@@ -66,7 +69,22 @@ public sealed class AirportSurroundingsMonitor : IDisposable
                 if (!string.Equals(next, _icao, StringComparison.OrdinalIgnoreCase)) { _icao = next; _gate.Reset(); _baselined = false; }
             }
             if (_icao.Length == 0) return;
-            var catalog = _cache.Get(_icao);
+
+            // Never build synchronously on this UI-thread timer tick — a first-time scenery
+            // scan/DB read would stall the whole message pump. TryGetCached is a lock-only read;
+            // when nothing usable is cached yet (or it's stale), kick off ONE background build
+            // and evaluate callouts on a later tick once it lands in the cache.
+            if (!_cache.TryGetCached(_icao, out var catalog))
+            {
+                if (!_buildInFlight)
+                {
+                    _buildInFlight = true;
+                    string icaoToBuild = _icao;
+                    Task.Run(() => _cache.Get(icaoToBuild))
+                        .ContinueWith(_ => _buildInFlight = false, TaskScheduler.Default);
+                }
+                return;
+            }
             if (catalog == null || catalog.Features.Count == 0) return;
 
             double hdgTrue = RelativeDirection.Normalize360(p.HeadingMagnetic + p.MagneticVariation);
