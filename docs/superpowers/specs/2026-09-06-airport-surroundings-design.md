@@ -467,6 +467,14 @@ Each phase is a PR-able increment that leaves the app fully working.
 - Taxiway SIGN text (the airport BGL carries `TaxiwaySign` records — "[A2]",
   "35-17" are visible in KTIW's Objects.bgl). A natural later addition ("sign
   ahead reads A2"), separate spec.
+- A base-library (Asobo `fs-base*`) model-name index — MEASURED and REJECTED (Task 14 spike,
+  2026-09-06): 6,613 BGLs / 1,621 model names indexed in ~10 s; of the unresolved placements at
+  KATL (16), KJAC (121) and KTIW (80), ZERO classify as a building — Asobo's library holds no
+  generic airport buildings, and the 46 base names that classify at all are world-POI landmarks
+  (`TelekomTower`, a cargo ship, military vehicles). Two facts for anyone re-trying: the Asobo
+  libraries are named `Asobo_*.BGL`, not `modelLib*.bgl`; and two of them are 1.2–1.4 GB, which
+  `ModelLibNameReader`'s whole-file Latin-1 string cannot hold (2 GB object ceiling) — a
+  streaming scan would be needed. Community packages top out around 100 MB, which it handles.
 - Decoding navdata `apron.vertices` blobs.
 - Jet-bridge/gate-door positions from OSM `aeroway=gate` / `jet_bridge`.
 - An airport BRIEFING readout (runways, frequencies, pattern altitude) as its
