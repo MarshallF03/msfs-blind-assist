@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Tell a pilot on the ground what is around the aircraft — terminals, concourses, FBOs, hangars, tower, fuel, cargo, aprons — via an `Alt+L` readout, a `Ctrl+Shift+L` list window, and opt-in passing callouts, from navdata, OpenStreetMap and the installed scenery package.
+**Goal:** Tell a pilot on the ground what is around the aircraft — terminals, concourses, FBOs, hangars, tower, fuel, cargo, aprons — via an `Alt+L` readout, a `Ctrl+Shift+L` list window, and opt-in passing callouts, from navdata, OpenStreetMap and the installed scenery package — and let the pilot taxi TO one of those places by resolving it onto a navdata stand.
 
 **Architecture:** Three pure sources (`NavdataFeatureSource`, `OsmFeatureSource` inside the existing Overpass pipeline, `SceneryFeatureSource` over the package's placement BGLs) produce `AirportFeature` lists; `AirportFeatureCatalog.Build` merges them per airport; a `SurroundingsCatalogCache` on MainForm holds one catalog per ICAO under the same invalidation tokens Where-Am-I uses. Three consumers read the catalog and never write it: `SurroundingsReport` (the `Alt+L` sentence and the window sections), `AirportSurroundingsMonitor` + `PassingCalloutGate` (callouts). Features are readout-only and never touch `TaxiGraph`.
 
@@ -15,7 +15,7 @@
 - Build with `dotnet build MSFSBlindAssist.sln -c Debug` — NEVER the bare `.csproj` (it silently builds AnyCPU into the wrong folder). Verify `MSFSBlindAssist\bin\x64\Debug\net10.0-windows\MSFSBlindAssist.exe` timestamp after a build meant to be run.
 - Tests: `dotnet test tests/MSFSBlindAssist.Tests/MSFSBlindAssist.Tests.csproj -c Debug -p:Platform=x64`. Filter one class with `--filter "FullyQualifiedName~ClassName"`.
 - Branch is `feature/airport-surroundings` (off `upstream/main`). Never commit to `francesco/feat/cows-da40` or `main`. Commit after every task with the trailer `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
-- Surroundings features are READOUT ONLY: never passed to `TaxiGraph.Build`, never a `TaxiNode`, never a routing/hold-short input.
+- Surroundings features are READOUT ONLY: never passed to `TaxiGraph.Build`, never a `TaxiNode`, never a routing/hold-short input. A feature may be a DESTINATION only by resolving onto navdata pavement (`FeatureDestinationResolver`: a stand within 150 m, else a taxi node within 100 m) — the route target is the stand, never the building.
 - OSM data stays IN-MEMORY (`TaxiDataCache`); only the scenery index (the user's own local files) is written to disk, under `%APPDATA%\MSFSBlindAssist\scenery-index\`.
 - The OSM query is scoped to the `aeroway=aerodrome` AREA; the radius fallback is bbox-filtered. A bare radius admits road gas stations.
 - A model name reaches speech ONLY after `SceneryModelNameClassifier` has produced human text.
@@ -36,6 +36,7 @@
 - `AirportFeatureCatalog.cs` — merge/dedupe, rank, `Version`.
 - `SurroundingsReport.cs` — `NearbyFeature`, ranking, zone, the `Alt+L` sentence, the window sections.
 - `PassingCalloutGate.cs` — pure callout state machine.
+- `FeatureDestinationResolver.cs` — a place → the navdata stand/node the route actually ends at.
 
 **New — sources**
 - `MSFSBlindAssist/Navigation/Surroundings/NavdataFeatureSource.cs` — concourse inference, stand clusters, helipads.
@@ -60,7 +61,7 @@
 - `docs/taxi-guidance.md`, `docs/hotkey-system.md`, `CLAUDE.md`, `changelog.d/`.
 
 **Tests (`tests/MSFSBlindAssist.Tests/`)**
-- `RelativeDirectionTests.cs`, `SurroundingsGeometryTests.cs`, `AirportFeatureCatalogTests.cs`, `NavdataFeatureSourceTests.cs`, `SurroundingsReportTests.cs`, `OsmFeatureClassifierTests.cs`, `PassingCalloutGateTests.cs`, `BglPlacementReaderTests.cs`, `ModelLibNameReaderTests.cs`, `SceneryModelNameClassifierTests.cs`, `SceneryPackageLocatorTests.cs`, `GsxTerminalFeatureSourceTests.cs`, and fixture `Fixtures/osm-features-kjac.json`.
+- `RelativeDirectionTests.cs`, `SurroundingsGeometryTests.cs`, `AirportFeatureCatalogTests.cs`, `NavdataFeatureSourceTests.cs`, `SurroundingsReportTests.cs`, `OsmFeatureClassifierTests.cs`, `PassingCalloutGateTests.cs`, `BglPlacementReaderTests.cs`, `ModelLibNameReaderTests.cs`, `SceneryModelNameClassifierTests.cs`, `SceneryPackageLocatorTests.cs`, `GsxTerminalFeatureSourceTests.cs`, `FeatureDestinationResolverTests.cs`, and fixture `Fixtures/osm-features-kjac.json`.
 
 ---
 
@@ -3296,7 +3297,305 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ---
 
-### Task 16: Docs, invariants, changelog fragments, PR
+### Task 16: `FeatureDestinationResolver` — a place becomes a navdata destination
+
+**Files:**
+- Create: `MSFSBlindAssist/Navigation/Surroundings/FeatureDestinationResolver.cs`
+- Test: `tests/MSFSBlindAssist.Tests/FeatureDestinationResolverTests.cs`
+
+**Interfaces:**
+- Produces:
+  - `sealed record PlaceDestination(AirportFeature Feature, ParkingSpot? Spot, int NodeId, double Lat, double Lon, double HeadingDeg, double DistanceMetres)` — `Spot` null means "route ends at the nearest taxi node"; `Lat/Lon/HeadingDeg` are the STAND's (or node's), never the building's.
+  - `readonly record struct NearestNode(int NodeId, double Lat, double Lon, double DistanceMetres)`
+  - `static bool FeatureDestinationResolver.IsRoutable(FeatureKind kind)` — Fbo, Hangar, Fuel, Terminal, Concourse, Cargo, FireStation, DeicePad, Office; never Tower, Helipad, Apron, Other.
+  - `static PlaceDestination? FeatureDestinationResolver.Resolve(AirportFeature feature, IReadOnlyList<ParkingSpot> spots, Func<double, double, NearestNode?> nearestNode)`
+  - `static string FeatureDestinationResolver.Label(PlaceDestination d)` — `"Narrows Aviation, FBO, ramp spot 12"` / `"Cessna Service Hangar, hangar, end of taxiway"`.
+  - Constants `MaxSpotMetres = 150`, `MaxNodeMetres = 100`.
+- Consumes: `ParkingSpot` (`Type`, `Latitude`, `Longitude`, `Heading`, `Name`, `Number`, `Suffix`), Task 2 types. The rule: a feature is NEVER a route target itself — it RESOLVES onto navdata pavement (a stand within 150 m, preferring the stand type that matches the place; else a taxi node within 100 m; else not routable). Same anti-grass rule as OSM aliases and GSX stands.
+
+- [ ] **Step 1: Write the failing tests**
+
+```csharp
+// tests/MSFSBlindAssist.Tests/FeatureDestinationResolverTests.cs
+using MSFSBlindAssist.Database.Models;
+using MSFSBlindAssist.Navigation.Surroundings;
+
+namespace MSFSBlindAssist.Tests;
+
+public class FeatureDestinationResolverTests
+{
+    private static AirportFeature F(FeatureKind k, string name, double lat, double lon)
+        => new() { Kind = k, Name = name, Lat = lat, Lon = lon, Source = FeatureSource.Scenery };
+    private static ParkingSpot S(int type, double lat, double lon, string name = "Parking", int number = 1, double hdg = 90)
+        => new() { Type = type, Latitude = lat, Longitude = lon, Name = name, Number = number, Heading = hdg };
+    private static NearestNode? NoNode(double lat, double lon) => null;
+    private static NearestNode? NodeAt(double lat, double lon) => new(42, lat + 0.0002, lon, 22.0);
+
+    // 0.0009° lat ≈ 100 m.
+    [Fact]
+    public void Fbo_prefers_the_nearest_ga_stand_over_a_closer_gate()
+    {
+        var fbo = F(FeatureKind.Fbo, "Narrows Aviation", 47.2700, -122.5700);
+        var spots = new List<ParkingSpot> { S(10, 47.2703, -122.5700, "A", 5), S(4, 47.2708, -122.5700, "Parking", 12) };
+        var d = FeatureDestinationResolver.Resolve(fbo, spots, NoNode);
+        Assert.NotNull(d);
+        Assert.Equal(12, d!.Spot!.Number);
+        Assert.Equal(47.2708, d.Lat);
+        Assert.Equal(90.0, d.HeadingDeg);
+        Assert.InRange(d.DistanceMetres, 85, 95);
+        Assert.Equal("Narrows Aviation, FBO, Parking 12", FeatureDestinationResolver.Label(d));
+    }
+
+    [Fact]
+    public void Falls_back_to_any_non_vehicle_stand_when_no_preferred_type_is_close()
+    {
+        var hangar = F(FeatureKind.Hangar, "ATP Hangar", 47.2700, -122.5700);
+        var spots = new List<ParkingSpot> { S(10, 47.2703, -122.5700, "A", 5), S(17, 47.2701, -122.5700, "V", 1), S(4, 47.2720, -122.5700) };
+        var d = FeatureDestinationResolver.Resolve(hangar, spots, NoNode);
+        Assert.Equal(5, d!.Spot!.Number);   // the gate: vehicles excluded, GA stand at 220 m is beyond 150 m
+    }
+
+    [Fact]
+    public void Fuel_resolves_to_a_fuel_stand()
+    {
+        var fuel = F(FeatureKind.Fuel, "Fuel", 47.2700, -122.5700);
+        var spots = new List<ParkingSpot> { S(4, 47.2701, -122.5700), S(16, 47.2706, -122.5700, "Parking", 3) };
+        Assert.Equal(16, FeatureDestinationResolver.Resolve(fuel, spots, NoNode)!.Spot!.Type);
+    }
+
+    [Fact]
+    public void Node_fallback_within_100m_when_no_stand_is_within_150m()
+    {
+        var hangar = F(FeatureKind.Hangar, "Cessna Service Hangar", 47.2700, -122.5700);
+        var spots = new List<ParkingSpot> { S(4, 47.2720, -122.5700) };
+        var d = FeatureDestinationResolver.Resolve(hangar, spots, NodeAt);
+        Assert.NotNull(d);
+        Assert.Null(d!.Spot);
+        Assert.Equal(42, d.NodeId);
+        Assert.Equal("Cessna Service Hangar, hangar, end of taxiway", FeatureDestinationResolver.Label(d));
+        Assert.Null(FeatureDestinationResolver.Resolve(hangar, spots, NoNode));
+        Assert.Null(FeatureDestinationResolver.Resolve(hangar, spots, (la, lo) => new NearestNode(7, la, lo, 130.0)));
+    }
+
+    [Theory]
+    [InlineData(FeatureKind.Tower)]
+    [InlineData(FeatureKind.Helipad)]
+    [InlineData(FeatureKind.Apron)]
+    [InlineData(FeatureKind.Other)]
+    public void Non_routable_kinds_never_resolve(FeatureKind kind)
+    {
+        Assert.False(FeatureDestinationResolver.IsRoutable(kind));
+        Assert.Null(FeatureDestinationResolver.Resolve(F(kind, "X", 47.27, -122.57), new List<ParkingSpot> { S(4, 47.27, -122.57) }, NodeAt));
+    }
+}
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `dotnet test tests/MSFSBlindAssist.Tests/MSFSBlindAssist.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~FeatureDestinationResolverTests"`
+Expected: build error, `FeatureDestinationResolver` not found.
+
+- [ ] **Step 3: Write the resolver**
+
+```csharp
+// MSFSBlindAssist/Navigation/Surroundings/FeatureDestinationResolver.cs
+using MSFSBlindAssist.Database.Models;
+using MSFSBlindAssist.Services.TaxiAugment;
+
+namespace MSFSBlindAssist.Navigation.Surroundings;
+
+public readonly record struct NearestNode(int NodeId, double Lat, double Lon, double DistanceMetres);
+
+/// <summary>
+/// Where the route actually ends when the pilot asks for a PLACE. Spot null → the nearest
+/// taxi node; Lat/Lon/HeadingDeg are the stand's (or node's), never the building's.
+/// </summary>
+public sealed record PlaceDestination(AirportFeature Feature, ParkingSpot? Spot, int NodeId, double Lat, double Lon, double HeadingDeg, double DistanceMetres);
+
+/// <summary>
+/// A feature is never a route target itself (spec invariant: features are readout-only and
+/// never enter TaxiGraph). It RESOLVES onto navdata pavement: the nearest stand within 150 m,
+/// preferring the stand type that matches the place (GA ramp for an FBO/hangar, FUEL for fuel,
+/// cargo for cargo), else any non-vehicle stand in range, else a taxi node within 100 m, else
+/// not routable. Same anti-grass rule OSM aliases and GSX stands already follow.
+/// </summary>
+public static class FeatureDestinationResolver
+{
+    public const double MaxSpotMetres = 150.0;
+    public const double MaxNodeMetres = 100.0;
+
+    public static bool IsRoutable(FeatureKind kind) => kind is FeatureKind.Fbo or FeatureKind.Hangar or FeatureKind.Fuel
+        or FeatureKind.Terminal or FeatureKind.Concourse or FeatureKind.Cargo or FeatureKind.FireStation
+        or FeatureKind.DeicePad or FeatureKind.Office;
+
+    private static bool IsPreferredStand(FeatureKind kind, int type) => kind switch
+    {
+        FeatureKind.Fbo or FeatureKind.Hangar or FeatureKind.Office or FeatureKind.FireStation => type is 2 or 3 or 4 or 5 or 12 or 15,
+        FeatureKind.Fuel => type == 16,
+        FeatureKind.Cargo => type is 6 or 7,
+        FeatureKind.Terminal or FeatureKind.Concourse => type is 9 or 10 or 11 or 13 or 14,
+        _ => true,
+    };
+
+    public static PlaceDestination? Resolve(AirportFeature feature, IReadOnlyList<ParkingSpot> spots, Func<double, double, NearestNode?> nearestNode)
+    {
+        if (!IsRoutable(feature.Kind)) return null;
+
+        ParkingSpot? best = null; double bestD = double.MaxValue; bool bestPreferred = false;
+        foreach (var s in spots)
+        {
+            if (s.Type == 17) continue;                               // vehicles: never a place to park an aircraft
+            double d = TaxiGeo.HaversineMeters(feature.Lat, feature.Lon, s.Latitude, s.Longitude);
+            if (d > MaxSpotMetres) continue;
+            bool preferred = IsPreferredStand(feature.Kind, s.Type);
+            if (best == null || (preferred && !bestPreferred) || (preferred == bestPreferred && d < bestD))
+            { best = s; bestD = d; bestPreferred = preferred; }
+        }
+        if (best != null)
+            return new PlaceDestination(feature, best, -1, best.Latitude, best.Longitude, best.Heading, bestD);
+
+        var node = nearestNode(feature.Lat, feature.Lon);
+        if (node is NearestNode n && n.DistanceMetres <= MaxNodeMetres)
+            return new PlaceDestination(feature, null, n.NodeId, n.Lat, n.Lon, TaxiGeo.BearingDeg(n.Lat, n.Lon, feature.Lat, feature.Lon), n.DistanceMetres);
+        return null;
+    }
+
+    /// <summary>"Narrows Aviation, FBO, Parking 12" — the place, its kind, and the stand you are actually guided to.</summary>
+    public static string Label(PlaceDestination d)
+    {
+        string kind = FeatureKindWords.Generic(d.Feature.Kind);
+        string kindWord = kind == "FBO" ? kind : kind.ToLowerInvariant();
+        string where = d.Spot != null ? $"{d.Spot.Name} {d.Spot.Number}{d.Spot.Suffix}".Trim() : "end of taxiway";
+        return $"{d.Feature.SpokenName}, {kindWord}, {where}";
+    }
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `dotnet test tests/MSFSBlindAssist.Tests/MSFSBlindAssist.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~FeatureDestinationResolverTests"`
+Expected: 8 passed.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add MSFSBlindAssist/Navigation/Surroundings/FeatureDestinationResolver.cs tests/MSFSBlindAssist.Tests/FeatureDestinationResolverTests.cs
+git commit -m "feat(surroundings): resolve a place onto navdata pavement for routing
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 17: "Place" destination type in the Taxi Assist form
+
+**Files:**
+- Modify: `MSFSBlindAssist/Forms/TaxiAssistForm.cs` — `cmbDestType.Items` (line 494), `PopulateDestinations` (line 2191, add an `isPlace` branch modelled on the deice branch at ~2330), `OnDestTypeChanged` (line 2742: hide the gate search/filters for Place; the empty-list announcement at its end), a new `Func<string, AirportFeatureCatalog?>? SurroundingsCatalogSupplier` property
+- Modify: `MSFSBlindAssist/MainForm.Dialogs.cs` (or wherever `new TaxiAssistForm(` is constructed — grep) to set `SurroundingsCatalogSupplier = icao => surroundingsCache.Get(icao)`
+- Test: none new (form code); the resolver carries the logic.
+
+**Interfaces:**
+- Produces: destination-type index **4 = "Place"**; labels from `FeatureDestinationResolver.Label`; the same `_destinationNodeMap/_destinationHeadingMap/_destinationHeadingTrueMap/_destinationThresholdMap/_destinationSpotMap` entries the gate and deice branches fill, so `OnCalculateClicked`, `LoadRoute`, `SetDestinationGate` and `ApplyGsxStopOffset` need NO change — a Place with a stand docks like a gate; a Place with only a node clears docking (`_destinationSpotMap` has no entry, so `TryGetValue` yields null → `SetDestinationGate(null)`).
+- Consumes: Task 16, `SurroundingsCatalogCache.Get` (Task 6), `TaxiGraph.FindNearestNode(lat, lon)` → `TaxiNode` (`NodeId`, `Latitude`, `Longitude`), `TaxiGraph.CalculateDistanceMeters`, `ParkingSpotSource.GetNamedSpots(_dataProvider, _gateSource, icao)` (the form already calls this at ~line 371 of LandingExitForm and in its own gate branch — match the local call).
+
+- [ ] **Step 1: Add the type and the supplier**
+
+Line 494:
+```csharp
+        cmbDestType.Items.AddRange(new object[] { "Runway", "Gate / Parking", "Progressive Taxi", "Deice Area", "Place" });
+```
+Property near `_destinationSpotMap` (line ~305):
+```csharp
+    /// <summary>
+    /// The surroundings catalog for an ICAO (MainForm wires SurroundingsCatalogCache.Get). Null
+    /// keeps the "Place" destination list empty, which is announced, never silent.
+    /// </summary>
+    public Func<string, Navigation.Surroundings.AirportFeatureCatalog?>? SurroundingsCatalogSupplier { get; set; }
+```
+Where MainForm constructs the form (grep `new TaxiAssistForm(`), add after construction: `taxiAssistForm.SurroundingsCatalogSupplier = icao => surroundingsCache.Get(icao);`.
+
+- [ ] **Step 2: Populate the Place list**
+
+In `PopulateDestinations`, after `bool isDeice = cmbDestType.SelectedIndex == 3;` add `bool isPlace = cmbDestType.SelectedIndex == 4;` and, before the final `else` (the gate branch), a new branch:
+
+```csharp
+        else if (isPlace)
+        {
+            // PLACE path: FBOs, hangars, fuel, terminals, cargo from the surroundings catalog,
+            // each RESOLVED onto navdata pavement by FeatureDestinationResolver (a stand within
+            // 150 m, else a taxi node within 100 m). Fills the same maps as the gate and deice
+            // branches so Calculate, LoadRoute and docking need no Place-specific code. A feature
+            // that resolves to nothing is not listed — there is no way to taxi to it.
+            var catalog = SurroundingsCatalogSupplier?.Invoke(_currentIcao);
+            if (catalog != null)
+            {
+                var named = Services.ParkingSpotSource.GetNamedSpots(_dataProvider, _gateSource, _currentIcao);
+                Navigation.Surroundings.NearestNode? Nearest(double lat, double lon)
+                {
+                    var n = _graph.FindNearestNode(lat, lon);
+                    if (n == null) return null;
+                    return new Navigation.Surroundings.NearestNode(n.NodeId, n.Latitude, n.Longitude,
+                        TaxiGraph.CalculateDistanceMeters(n.Latitude, n.Longitude, lat, lon));
+                }
+
+                foreach (var feature in catalog.Features.Where(f => Navigation.Surroundings.FeatureDestinationResolver.IsRoutable(f.Kind))
+                                                        .OrderBy(f => f.SpokenName, StringComparer.OrdinalIgnoreCase))
+                {
+                    var dest = Navigation.Surroundings.FeatureDestinationResolver.Resolve(feature, named, Nearest);
+                    if (dest == null) continue;
+
+                    int nodeId = dest.NodeId;
+                    if (dest.Spot != null)
+                    {
+                        var nearNode = _graph.FindNearestNode(dest.Lat, dest.Lon);
+                        if (nearNode == null) continue;
+                        if (TaxiGraph.CalculateDistanceMeters(nearNode.Latitude, nearNode.Longitude, dest.Lat, dest.Lon) > 100.0) continue;
+                        nodeId = nearNode.NodeId;
+                    }
+
+                    string label = Navigation.Surroundings.FeatureDestinationResolver.Label(dest);
+                    if (_destinationNodeMap.ContainsKey(label)) continue;
+                    _destinationNodeMap[label] = nodeId;
+                    _destinationHeadingMap[label] = dest.HeadingDeg;
+                    _destinationHeadingTrueMap[label] = dest.HeadingDeg;
+                    _destinationThresholdMap[label] = (dest.Lat, dest.Lon);
+                    if (dest.Spot != null) _destinationSpotMap[label] = dest.Spot;
+                    cmbDestination.Items.Add(label);
+                }
+            }
+        }
+```
+
+(Headings: `ParkingSpot.Heading` is already the convention the gate branch stores for both maps — copy exactly what the gate branch does for `_destinationHeadingTrueMap` if it converts; read the gate branch's two heading lines and mirror them.)
+
+- [ ] **Step 3: Type switching and the empty announcement**
+
+In `OnDestTypeChanged`, nothing else changes for Place (`isGate` is index 1, so the search box and filters hide themselves). At its end, beside the deice `"no deicing areas"` announcement, add:
+```csharp
+        if (cmbDestType.SelectedIndex == 4 && cmbDestination.Items.Count == 0)
+            _announcer?.Announce($"No places to route to at {_currentIcao}. Open Alt+L to hear what is around you.");
+```
+(Match the deice announcement's exact announcer call and field name.)
+
+- [ ] **Step 4: Build and smoke in sim**
+
+Run: `dotnet build MSFSBlindAssist.sln -c Debug` → 0 errors; full test suite → green.
+In-sim (owner): KTIW after landing on 17 — Taxi form, destination type Place, pick "Narrows Aviation, FBO, Parking 12", Calculate → route summary names it, guidance ends at the stand, docking engages if navdata heading is usable. Then pick "Fuel, fuel, Parking 3" → route to the fuel island.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add MSFSBlindAssist/Forms/TaxiAssistForm.cs MSFSBlindAssist/MainForm*.cs
+git commit -m "feat(taxi): Place destination type — taxi to an FBO, hangar, fuel or terminal
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+**Deferred (own task later, against a live clearance):** SayIntentions "taxi to the FBO" / "taxi to Signature" → a `Place` candidate tried after the gate name and before any runway, through the same resolver. Not in this plan: no capture yet of SI phrasing a place instead of a stand.
+
+---
+
+### Task 18: Docs, invariants, changelog fragments, PR
 
 **Files:**
 - Modify: `docs/taxi-guidance.md` (hotkey tables at lines ~489 and ~593; a new "Airport surroundings" section after the Where-Am-I implementation section, ~line 628; the stale "per-ICAO JSON, 30-day TTL" line ~1922 corrected to "in-memory")
@@ -3310,6 +3609,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 | Look around | Output > `Alt+L` | `Taxiway A at KTIW. Narrows Aviation Hangar, to the right, 80 metres. Control Tower, ahead, 200 metres. Fuel, behind and to the left, 210 metres.` Where you are, the apron or concourse you are in, then the nearest features. Ground-only. |
 | Surroundings window | Output > `Ctrl+Shift+L` | Read-only list of everything within 1 km, nearest first, with the airport's fuel and frequencies on the first row. |
+| Taxi to a place | Taxi form, destination type **Place** | Lists every FBO, hangar, fuel island, terminal, cargo area the catalog knows that resolves onto a stand (or a taxi node) — "Narrows Aviation, FBO, Parking 12" — and routes there like a gate. |
 ```
 and a new section "## Airport surroundings (Alt+L, Ctrl+Shift+L, passing callouts)" carrying: the three tiers with their measured coverage (copy the spec's Motivation bullets), the merge order, the callout rules (radii, abeam window, throttles, suppression list, baseline-first), the settings, the scenery-index cache location, and the six invariants. Fix the augmentation diagram line that still says "per-ICAO JSON, 30-day TTL" to "in-memory, per session".
 
@@ -3317,7 +3617,7 @@ and a new section "## Airport surroundings (Alt+L, Ctrl+Shift+L, passing callout
 
 `CLAUDE.md` — under "### Taxi guidance" invariants, add:
 ```
-- Airport surroundings features (`Navigation/Surroundings`) are READOUT ONLY — never handed to `TaxiGraph.Build`, never a node, never a routing/hold-short input. → [taxi-guidance.md](docs/taxi-guidance.md)
+- Airport surroundings features (`Navigation/Surroundings`) are READOUT ONLY — never handed to `TaxiGraph.Build`, never a node, never a routing/hold-short input. The ONE way a place becomes a destination is `FeatureDestinationResolver`, which resolves it onto a navdata stand within 150 m (else a taxi node within 100 m) and routes to THAT — never to the building's coordinate. → [taxi-guidance.md](docs/taxi-guidance.md)
 - OSM feature data stays IN-MEMORY like every other OSM datum; only the scenery index (the user's own local package files) is disk-cached, under `%APPDATA%\MSFSBlindAssist\scenery-index`. → [taxi-guidance.md](docs/taxi-guidance.md)
 - The OSM feature query is scoped to the `aeroway=aerodrome` AREA, and the radius fallback is bbox-filtered against the navdata airport extent — a bare radius admitted a Chevron on the road outside KTIW. → [taxi-guidance.md](docs/taxi-guidance.md)
 - A scenery model name reaches speech ONLY through `SceneryModelNameClassifier`; raw `KTIW_*` / `concourse_a_02` strings never do. Its rules are pinned to measured package names — extend the test table first. → [taxi-guidance.md](docs/taxi-guidance.md)
@@ -3336,6 +3636,7 @@ git push -u origin feature/airport-surroundings
 gh pr create --repo oasis1701/msfs-blind-assist --base main --title "Airport surroundings awareness: Alt+L look-around, surroundings window, passing callouts, scenery index" --body-file <(cat <<'EOF'
 ## Summary
 - `Alt+L` (output mode): where you are, the apron/concourse you are in, the nearest terminals, hangars, FBOs, tower, fuel and cargo with direction and distance.
+- Taxi form destination type **Place**: taxi to an FBO, hangar, fuel island, terminal or cargo area — resolved onto the navdata stand in front of it.
 - `Ctrl+Shift+L`: a read-only list of everything within 1 km plus the airport's fuel and frequencies.
 - Opt-in passing callouts ("Passing Concourse B, on the left.") while taxiing, default off.
 - Three sources: unused navdata columns (concourse inference from gate letters, fuel/cargo/GA clusters, helipads, COM), a widened area-scoped OSM query, and the installed scenery package's placement BGL (offline, disk-cached).
@@ -3346,6 +3647,7 @@ gh pr create --repo oasis1701/msfs-blind-assist --base main --title "Airport sur
 3. KATL (imaginesim): at a T gate → "At Concourse T." then Concourse A/B and cargo; enable callouts, taxi to 26R → "Passing Concourse …" callouts, none during takeoff assist.
 4. A default Asobo airport with lettered gates (no OSM/scenery): concourse readout from navdata alone.
 5. Airborne: `Alt+L` says "In flight."
+6. KTIW after landing: Taxi form → Place → "Narrows Aviation, FBO, Parking 12" → Calculate → guidance ends at the stand.
 
 Spec: docs/superpowers/specs/2026-09-06-airport-surroundings-design.md
 
@@ -3366,6 +3668,9 @@ EOF
 cat > changelog.d/NNN-surroundings-callouts.feature.md <<'EOF'
 Optional passing callouts while taxiing ("Passing Concourse B, on the left") — off by default, switched on under Taxi Guidance settings, and silent during takeoff, landing rollout and docking.
 EOF
+cat > changelog.d/NNN-taxi-to-place.feature.md <<'EOF'
+The taxi form has a new destination type, Place: pick an FBO, hangar, fuel island, terminal or cargo area by name and guidance takes you to the stand in front of it, docking included where the scenery gives a stop.
+EOF
 cat > changelog.d/NNN-scenery-index.feature.md <<'EOF'
 At add-on airports the surroundings readout also knows what the installed scenery actually models — named hangars, concourses, cargo buildings and the tower are read from the package on disk, so a hangar OpenStreetMap leaves unnamed can still be called by name.
 EOF
@@ -3384,6 +3689,6 @@ Run: `gh pr checks --watch` — the test job and the changelog check must both b
 
 ## Self-review notes (done at writing time)
 
-- Spec coverage: §1 model → T2; §2a navdata → T3 (tower removed per the measured NULL column); §2b OSM → T7–T8; §2c scenery → T11–T14; §2d GSX → T15; §3 merge → T4; §4 geometry → T1–T2; §5 `Alt+L` → T5–T6; §6 window → T9 (reuses `SayIntentionsInfoForm`, no F5 — spec amended); §7 callouts → T10; §8 settings → T10, T13; §9 hotkeys → T6; §10 error handling → each reader/source swallows to empty + `Log.Warn`; §11 tests → one class per pure unit; §12 phases → task order.
+- Spec coverage: §1 model → T2; §2a navdata → T3 (tower removed per the measured NULL column); §2b OSM → T7–T8; §2c scenery → T11–T14; §2d GSX → T15; §3 merge → T4; §4 geometry → T1–T2; §5 `Alt+L` → T5–T6; §6 window → T9 (reuses `SayIntentionsInfoForm`, no F5 — spec amended); §7 callouts → T10; §8 settings → T10, T13; §9 hotkeys → T6; §10 error handling → each reader/source swallows to empty + `Log.Warn`; §11 tests → one class per pure unit; §12 phases → task order; §7b taxi-to-place → T16–T17 (SayIntentions mapping deferred).
 - Type consistency: `NearbyFeature(Feature, DistanceMetres, RelativeBearingDeg)` used identically in T5 and T10; `AirportFacilities` fields in T3 match the reads in T8/T9/T13; `SurroundingsCatalogCache.Get(icao)` used by T6, T9, T10; `InfoSection` is the existing SayIntentions record.
 - Deviation from spec recorded: the window has no `F5`; reopen the chord instead.

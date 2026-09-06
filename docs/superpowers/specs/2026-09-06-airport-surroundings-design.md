@@ -340,6 +340,31 @@ list window) with a title parameter rather than a new form.
   turnaround-liftoff detector (the same trio every other baseline-first
   monitor observes).
 
+### 7b. Taxi to a place (added 2026-09-06 after the first review)
+
+The pilot can ROUTE to a feature — an FBO or hangar after landing, the fuel
+island, a terminal — without the feature ever entering the graph:
+
+- `FeatureDestinationResolver.Resolve(feature, namedSpots, nearestNode)` maps a
+  feature to the nearest navdata **parking spot within 150 m** of its
+  representative point, preferring the stand type that matches the place (GA
+  ramp types for an FBO/hangar/office, FUEL stands for fuel, cargo stands for
+  cargo, gate types for a terminal/concourse), then any non-vehicle stand in
+  range; failing that, the nearest **taxi node within 100 m**; failing that,
+  the place is not routable and is not listed. Routable kinds: Fbo, Hangar,
+  Fuel, Terminal, Concourse, Cargo, FireStation, DeicePad, Office. Never
+  Tower, Helipad, Apron, Other.
+- The Taxi Assist form gains destination type **Place** (index 4, beside
+  Deice Area). Each entry reads "Narrows Aviation, FBO, Parking 12" — the
+  place, its kind, and the stand you will actually be guided to — and fills
+  the same destination maps the gate/deice branches fill, so Calculate,
+  `LoadRoute`, docking and the GSX stop offset need no Place-specific code.
+  A Place that resolved only to a node routes there with docking cleared.
+- Route summary and arrival speak the label (it IS the destination name).
+- Landing-exit handoff and the SayIntentions import are unchanged in this
+  spec; "taxi to the FBO" as an SI clearance candidate is DEFERRED until a
+  live capture shows SI phrasing a place rather than a stand.
+
 ### 8. Settings
 
 | Setting | Default | Panel |
@@ -412,7 +437,8 @@ holding short; `Ctrl+Shift+L` list; callouts ON for one taxi to the runway.
 3. Surroundings window (`Ctrl+Shift+L`).
 4. Passing-callout monitor + setting.
 5. Scenery index (readers, classifier, cache, setting, base-library spike).
-6. GSX terminal tier, docs (`taxi-guidance.md` new section + hotkey tables,
+6. Taxi-to-place: resolver + Place destination type.
+7. GSX terminal tier, docs (`taxi-guidance.md` new section + hotkey tables,
    `hotkey-system.md`), changelog fragments, CLAUDE.md invariant lines.
 
 Each phase is a PR-able increment that leaves the app fully working.
@@ -420,7 +446,10 @@ Each phase is a PR-able increment that leaves the app fully working.
 ## Invariants this design adds (for CLAUDE.md / taxi-guidance.md)
 
 - Surroundings features are READOUT ONLY: never handed to `TaxiGraph.Build`,
-  never a node, never a routing/hold-short input.
+  never a node, never a routing/hold-short input. The ONE way a place becomes
+  a destination is `FeatureDestinationResolver`, which resolves it onto a
+  navdata stand within 150 m (else a taxi node within 100 m) — the route
+  target is the stand, never the building.
 - OSM feature data stays IN-MEMORY like every other OSM datum; only the
   scenery index (the user's own local files) is disk-cached.
 - The OSM query is scoped to the aerodrome AREA, with a bbox post-filter on
@@ -443,3 +472,4 @@ Each phase is a PR-able increment that leaves the app fully working.
 - An airport BRIEFING readout (runways, frequencies, pattern altitude) as its
   own key — the facts row on the window is the toe-hold.
 - Airborne use; the feature is ground-only like Where Am I.
+- SayIntentions "taxi to the FBO" resolution (see §7b) — deferred to a live capture.
