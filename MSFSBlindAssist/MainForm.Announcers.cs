@@ -1848,13 +1848,52 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// Ctrl+Shift+L (output mode): surroundings window. Task 9 replaces this stub with a real
-    /// browsable window; until then it speaks the same one-line readout as Alt+L.
+    /// Ctrl+Shift+L (output mode): everything within 1 km as a browsable list. No spoken summary
+    /// on open — the screen reader speaks the window and its first item (CLAUDE.md rule). Reuses
+    /// the SayIntentions sectioned list window; a fresh press replaces the previous window.
     /// </summary>
     private void ShowSurroundingsWindow()
     {
-        // Task 9 replaces this
-        AnnounceLookAround();
+        if (airportDataProvider == null) { announcer.AnnounceImmediate("Airport database not available."); return; }
+        if (!_lastOnGround) { announcer.AnnounceImmediate("In flight."); return; }
+
+        simConnectManager.RequestAircraftPositionAsync(position =>
+        {
+            IReadOnlyList<MSFSBlindAssist.Services.SayIntentions.InfoSection>? sections = null;
+            string? failure = null;
+            string icao = "";
+            try
+            {
+                var nearby = airportDataProvider.GetNearbyAirportICAOs(position.Latitude, position.Longitude, 5.0)
+                    .Where(c => c != null && c.Length == 4).ToList();
+                if (nearby.Count == 0) failure = "No airport nearby.";
+                else
+                {
+                    icao = nearby[0];
+                    var catalog = surroundingsCache.Get(icao);
+                    if (catalog == null || catalog.Features.Count == 0) failure = $"No surroundings data for {icao}.";
+                    else
+                    {
+                        var facilities = (airportDataProvider as MSFSBlindAssist.Database.IAirportFacilitiesProvider)?.GetAirportFacilities(icao);
+                        double hdgTrue = MSFSBlindAssist.Services.RelativeDirection.Normalize360(position.HeadingMagnetic + position.MagneticVariation);
+                        sections = MSFSBlindAssist.Navigation.Surroundings.SurroundingsReport.BuildSections(
+                            icao, catalog, facilities?.DescribeFacts() ?? "", position.Latitude, position.Longitude, hdgTrue,
+                            m => MSFSBlindAssist.Services.DistanceFormatter.FromMetres(m));
+                    }
+                }
+            }
+            catch (Exception ex) { failure = $"Surroundings lookup failed. {ex.Message}"; }
+
+            void Show()
+            {
+                if (failure != null) { announcer.AnnounceImmediate(failure); return; }
+                try { surroundingsForm?.Close(); } catch { }
+                surroundingsForm = new MSFSBlindAssist.Forms.SayIntentionsInfoForm(sections!, null, $"Surroundings at {icao}");
+                surroundingsForm.FormClosed += (_, _) => surroundingsForm = null;
+                surroundingsForm.Show();
+            }
+            if (this.InvokeRequired) this.BeginInvoke(Show); else Show();
+        });
     }
 
     private void OnTaxiGuidanceStateChanged(object? sender, TaxiGuidanceState newState)

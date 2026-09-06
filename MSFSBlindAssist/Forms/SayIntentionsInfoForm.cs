@@ -58,10 +58,11 @@ public class SayIntentionsInfoForm : Form
     private Panel _sectionPanel = null!;
     private Button _closeButton = null!;
 
-    public SayIntentionsInfoForm(IReadOnlyList<InfoSection> sections, IntPtr? previousWindow = null)
+    public SayIntentionsInfoForm(IReadOnlyList<InfoSection> sections, IntPtr? previousWindow = null, string? title = null)
     {
         _previousWindow = previousWindow ?? GetForegroundWindow();
         InitializeComponent(sections);
+        if (!string.IsNullOrWhiteSpace(title)) Text = title;
     }
 
     private void InitializeComponent(IReadOnlyList<InfoSection> sections)

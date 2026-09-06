@@ -179,6 +179,8 @@ public partial class MainForm : Form
 
     private Forms.WeatherRadarForm? weatherRadarForm;
 
+    private MSFSBlindAssist.Forms.SayIntentionsInfoForm? surroundingsForm;
+
     private MSFSBlindAssist.Navigation.FlightPlanManager flightPlanManager = null!;
 
     private MSFSBlindAssist.Navigation.WaypointTracker waypointTracker = null!;

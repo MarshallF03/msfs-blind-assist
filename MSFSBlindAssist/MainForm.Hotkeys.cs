@@ -404,7 +404,7 @@ public partial class MainForm
                 AnnounceLookAround();
                 break;
             case HotkeyAction.ShowSurroundings:
-                ShowSurroundingsWindow();   // implemented in Task 9; until then a one-line stub calls AnnounceLookAround()
+                ShowSurroundingsWindow();
                 break;
             case HotkeyAction.AnnounceGroundTraffic:
                 groundTrafficMonitor.AnnounceNearestTrafficSummary();
