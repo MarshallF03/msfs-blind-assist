@@ -1,4 +1,6 @@
+using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using MSFSBlindAssist.Navigation.Surroundings;
 using MSFSBlindAssist.Utils.Logging;
 
@@ -19,8 +21,12 @@ public sealed class SceneryPackageIndexer
     private readonly object _lock = new();
     public string LastStatus { get; private set; } = "";
 
+    private const int CurrentSchemaVersion = 1;
+    private static readonly JsonSerializerOptions JsonOptions = new() { Converters = { new JsonStringEnumConverter() } };
+
     private sealed class CacheFile
     {
+        public int SchemaVersion { get; set; }
         public string Package { get; set; } = "";
         public long LayoutLength { get; set; }
         public long LayoutTicks { get; set; }
@@ -59,7 +65,12 @@ public sealed class SceneryPackageIndexer
         string layout = Path.Combine(dir, "layout.json");
         var info = new FileInfo(layout);
         long len = info.Exists ? info.Length : 0, ticks = info.Exists ? info.LastWriteTimeUtc.Ticks : 0;
-        string cachePath = Path.Combine(_cacheDir, Path.GetFileName(dir.TrimEnd('\\', '/')) + ".json");
+
+        // Generate cache file name using SHA-256 hash of normalized full path
+        string fullPath = Path.GetFullPath(dir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).ToUpperInvariant();
+        string hash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(fullPath))).Substring(0, 8);
+        string leafName = Path.GetFileName(dir.TrimEnd('\\', '/'));
+        string cachePath = Path.Combine(_cacheDir, $"{leafName}-{hash}.json");
 
         lock (_lock)
         {
@@ -67,8 +78,8 @@ public sealed class SceneryPackageIndexer
             {
                 try
                 {
-                    var cached = JsonSerializer.Deserialize<CacheFile>(File.ReadAllText(cachePath));
-                    if (cached != null && cached.LayoutLength == len && cached.LayoutTicks == ticks) return cached;
+                    var cached = JsonSerializer.Deserialize<CacheFile>(File.ReadAllText(cachePath), JsonOptions);
+                    if (cached != null && cached.SchemaVersion == CurrentSchemaVersion && cached.LayoutLength == len && cached.LayoutTicks == ticks) return cached;
                 }
                 catch { /* rebuild */ }
             }
@@ -93,14 +104,14 @@ public sealed class SceneryPackageIndexer
                 pts.Add(new LatLon(p.Lat, p.Lon));
             }
 
-            var cf = new CacheFile { Package = dir, LayoutLength = len, LayoutTicks = ticks, Placements = placements.Count, Unresolved = unresolved };
+            var cf = new CacheFile { SchemaVersion = CurrentSchemaVersion, Package = dir, LayoutLength = len, LayoutTicks = ticks, Placements = placements.Count, Unresolved = unresolved };
             foreach (var ((kind, name), pts) in groups)
             {
                 var cen = SurroundingsGeometry.Centroid(pts);
                 cf.Features.Add(new Entry { Kind = kind, Name = name, Lat = cen.Lat, Lon = cen.Lon });
             }
             Directory.CreateDirectory(_cacheDir);
-            File.WriteAllText(cachePath, JsonSerializer.Serialize(cf));
+            File.WriteAllText(cachePath, JsonSerializer.Serialize(cf, JsonOptions));
             Log.Info("SceneryIndex", $"{icao}: indexed {Path.GetFileName(dir)}: {cf.Features.Count} features, {placements.Count} placements, {unresolved} unresolved");
             return cf;
         }

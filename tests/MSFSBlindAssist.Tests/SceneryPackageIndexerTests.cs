@@ -50,4 +50,62 @@ public class SceneryPackageIndexerTests : IDisposable
         File.WriteAllText(Path.Combine(pkg, "layout.json"), "{ \"changed\": true }");
         Assert.Empty(indexer.GetFeatures("KATL", new[] { pkg }));
     }
+
+    [Fact]
+    public void Cache_file_stores_kind_by_name_and_a_schema_version()
+    {
+        string pkg = MakePackage();
+        string cache = Path.Combine(_root, "cache");
+        var indexer = new SceneryPackageIndexer(cache);
+
+        var features = indexer.GetFeatures("KATL", new[] { pkg });
+        Assert.Single(features);
+
+        // Read the cache file as text and verify it contains the enum name and schema version
+        var cacheFiles = Directory.GetFiles(cache, "*.json");
+        Assert.Single(cacheFiles);
+
+        string json = File.ReadAllText(cacheFiles[0]);
+        Assert.Contains("\"Kind\":\"Concourse\"", json);
+        Assert.Contains("\"SchemaVersion\":1", json);
+    }
+
+    [Fact]
+    public void Two_packages_with_the_same_leaf_name_get_distinct_cache_files()
+    {
+        string cache = Path.Combine(_root, "cache");
+
+        // Create two packages with the same leaf folder name in different root directories
+        string pkgA = Path.Combine(_root, "a", "pkg", "scenery");
+        string pkgB = Path.Combine(_root, "b", "pkg", "scenery");
+        Directory.CreateDirectory(pkgA);
+        Directory.CreateDirectory(pkgB);
+
+        var gA = Guid.NewGuid();
+        string xml = $"<ModelInfo guid=\"{{{gA}}}\" name=\"concourse_a_01\"/>";
+        var lib = new byte[0x38 + 20].Concat(Encoding.Latin1.GetBytes(xml)).ToArray();
+        BitConverter.TryWriteBytes(lib.AsSpan(0, 4), 0x19920201u);
+
+        // Write package A
+        File.WriteAllBytes(Path.Combine(pkgA, "modelLib.BGL"), lib);
+        File.WriteAllBytes(Path.Combine(pkgA, "objects.bgl"), BglPlacementReaderTests.BuildBgl((33.640, -84.430, 0, gA)));
+        File.WriteAllText(Path.Combine(_root, "a", "pkg", "layout.json"), "{}");
+
+        // Write package B (same structure, different location)
+        File.WriteAllBytes(Path.Combine(pkgB, "modelLib.BGL"), lib);
+        File.WriteAllBytes(Path.Combine(pkgB, "objects.bgl"), BglPlacementReaderTests.BuildBgl((34.640, -85.430, 0, gA)));
+        File.WriteAllText(Path.Combine(_root, "b", "pkg", "layout.json"), "{}");
+
+        var indexer = new SceneryPackageIndexer(cache);
+        string pkgDirA = Path.Combine(_root, "a", "pkg");
+        string pkgDirB = Path.Combine(_root, "b", "pkg");
+
+        // Index both packages
+        indexer.GetFeatures("KATL", new[] { pkgDirA });
+        indexer.GetFeatures("KATL", new[] { pkgDirB });
+
+        // Both should be cached with different file names (despite same leaf name)
+        var cacheFiles = Directory.GetFiles(cache, "*.json");
+        Assert.Equal(2, cacheFiles.Length);
+    }
 }
