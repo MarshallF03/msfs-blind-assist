@@ -150,8 +150,9 @@ new accessor on the augmenting decorator — NOT a widening of
   (rows within 60 m merge; name "Fuel" + `Detail` from `has_avgas`/`has_jetfuel`
   → "avgas and jet"); cargo types → `Cargo` ("Cargo ramp"); GA ramp types → an
   `Apron` "GA ramp" cluster; vehicle stands are ignored.
-- **Tower** from `airport.tower_lonx/laty` when non-null and
-  `has_tower_object = 1` (a tower position with no object is a data stub).
+- **Tower: NOT from navdata.** `airport.tower_lonx/laty` is NULL on all 41,866 rows of
+  the current build (measured 2026-09-06) even where `has_tower_object = 1`; the tower
+  comes from OSM and the scenery scan only.
 - **Helipads** from `helipad` (name "Helipad" or "Helipad {n}" when several).
 - **Airport facts** (not features; one line on the window only): avgas/jet
   fuel flags, tower/ground/ATIS/UNICOM from `com`, rendered as "Tower 118.5"
@@ -310,8 +311,10 @@ units and announce "3 of 17"), `AccessibleName` "Surroundings at KTIW, 17
 items", item 0 pre-selected, no spoken summary on open (the reader speaks the
 list). Rows: `"{Name} — {dir}, {dist}"` plus a first "facts" row ("Avgas and
 jet fuel. Tower 118.5, Ground 121.9, UNICOM 122.95.") when tier-1 facts exist.
-Everything within 1 km, nearest first. `F5` recomputes from the live position;
-`Escape` closes. Not live-updating (no reselect-under-the-caret problem).
+Everything within 1 km, nearest first.
+`Escape` closes; reopen the chord for a fresh snapshot. Not live-updating (no
+reselect-under-the-caret problem). Reuses `SayIntentionsInfoForm` (sectioned
+list window) with a title parameter rather than a new form.
 
 ### 7. Consumer 3 — passing callouts (`Services/AirportSurroundingsMonitor.cs`)
 
