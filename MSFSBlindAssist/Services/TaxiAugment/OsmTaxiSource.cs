@@ -76,24 +76,43 @@ public sealed class OsmTaxiSource : ITaxiDataSource
     /// ("Terminal 3"), which StandId would parse as stand number 3 and alias onto an
     /// unrelated gate.</para>
     /// </summary>
-    internal static string BuildQuery(double lat, double lon)
+    internal static string BuildQuery(double lat, double lon, string icao)
     {
-        string around = string.Format(
-            CultureInfo.InvariantCulture, "(around:5000,{0:0.######},{1:0.######});", lat, lon);
+        string around = string.Format(CultureInfo.InvariantCulture, "(around:5000,{0:0.######},{1:0.######});", lat, lon);
+        string safeIcao = new string((icao ?? "").Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
 
-        return "[out:json][timeout:50];(" +
+        return "[out:json][timeout:50];" +
+               $"area[\"aeroway\"=\"aerodrome\"][\"icao\"=\"{safeIcao}\"]->.ad;" +
+               "(" +
                $"way[\"aeroway\"=\"taxiway\"]{around}" +
                $"node[\"aeroway\"=\"parking_position\"]{around}" +
                $"way[\"aeroway\"=\"parking_position\"]{around}" +
                $"node[\"aeroway\"=\"gate\"]{around}" +
                $"way[\"aeroway\"=\"gate\"]{around}" +
                $"node[\"aeroway\"=\"holding_position\"]{around}" +
-               ");out tags geom;";
+               FeatureClauses("(area.ad)") +
+               ");out tags geom center;";
     }
+
+    /// <summary>Feature-only query for an aerodrome OSM has not tagged with an icao= area; the
+    /// caller bbox-filters the result against the navdata airport extent (AirportFacilities).</summary>
+    internal static string BuildFeatureFallbackQuery(double lat, double lon)
+    {
+        string around = string.Format(CultureInfo.InvariantCulture, "(around:3000,{0:0.######},{1:0.######})", lat, lon);
+        return "[out:json][timeout:30];(" + FeatureClauses(around) + ");out tags geom center;";
+    }
+
+    private static string FeatureClauses(string scope) =>
+        $"nwr[\"aeroway\"~\"^(terminal|hangar|apron|tower|control_tower|fuel|helipad)$\"]{scope};" +
+        $"nwr[\"building\"~\"^(hangar|terminal)$\"]{scope};" +
+        $"nwr[\"man_made\"=\"tower\"][\"tower:type\"=\"aircraft_control\"]{scope};" +
+        $"nwr[\"amenity\"~\"^(fuel|fire_station)$\"]{scope};" +
+        $"nwr[\"office\"][\"name\"]{scope};" +
+        $"nwr[\"building\"][\"name\"]{scope};";
 
     public async Task<AirportTaxiData?> FetchAsync(string icao, double lat, double lon, CancellationToken ct)
     {
-        string q = BuildQuery(lat, lon);
+        string q = BuildQuery(lat, lon, icao);
 
         // ONE snapshot of the cooldown map, partitioned in a single pass. Two separate
         // `Where` passes over the shared static dictionary are not atomic: a concurrent
@@ -123,7 +142,10 @@ public sealed class OsmTaxiSource : ITaxiDataSource
                     attemptCts.Token);
                 if (!resp.IsSuccessStatusCode) { MarkFailed(url); continue; }
                 CooldownUntilUtc.TryRemove(url, out _);
-                return Parse(await resp.Content.ReadAsStringAsync(attemptCts.Token));
+                var parsed = Parse(await resp.Content.ReadAsStringAsync(attemptCts.Token));
+                if (parsed.Features.Count == 0)
+                    await TryFallbackFeaturesAsync(url, lat, lon, parsed, ct).ConfigureAwait(false);
+                return parsed;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -140,6 +162,26 @@ public sealed class OsmTaxiSource : ITaxiDataSource
         return null;
     }
 
+    /// <summary>One extra request on the SAME mirror when the area-scoped feature clauses returned
+    /// nothing (the aerodrome polygon lacks an icao tag, or there is none). Fills parsed.Features
+    /// from a 3 km radius; the decorator bbox-filters it. Failure is silent — the taxiway half is
+    /// already in hand and must not be lost to a feature-only miss.</summary>
+    private async Task TryFallbackFeaturesAsync(string url, double lat, double lon, AirportTaxiData parsed, CancellationToken ct)
+    {
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(PerMirrorTimeout);
+            using var resp = await _http.PostAsync(url,
+                new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("data", BuildFeatureFallbackQuery(lat, lon)) }), cts.Token);
+            if (!resp.IsSuccessStatusCode) return;
+            var extra = Parse(await resp.Content.ReadAsStringAsync(cts.Token));
+            parsed.Features.AddRange(extra.Features);
+            parsed.FeaturesFromFallback = extra.Features.Count > 0;
+        }
+        catch { /* feature-only miss; taxiways already parsed */ }
+    }
+
     private static bool IsCoolingDown(string url, DateTime nowUtc) =>
         CooldownUntilUtc.TryGetValue(url, out var until) && until > nowUtc;
 
@@ -153,6 +195,9 @@ public sealed class OsmTaxiSource : ITaxiDataSource
         if (!doc.RootElement.TryGetProperty("elements", out var els)) return data;
         foreach (var el in els.EnumerateArray())
         {
+            var feature = OsmFeatureClassifier.Classify(el);
+            if (feature != null) { data.Features.Add(feature); continue; }
+
             var tags = el.TryGetProperty("tags", out var t) ? t : default;
             string aeroway = tags.ValueKind == JsonValueKind.Object && tags.TryGetProperty("aeroway", out var aw)
                 ? (aw.GetString() ?? "") : "";
