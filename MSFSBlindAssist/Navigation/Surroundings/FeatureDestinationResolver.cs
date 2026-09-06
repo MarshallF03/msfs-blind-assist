@@ -9,6 +9,10 @@ public readonly record struct NearestNode(int NodeId, double Lat, double Lon, do
 /// Where the route actually ends when the pilot asks for a PLACE. Spot null → the nearest
 /// taxi node; Lat/Lon/HeadingDeg are the stand's (or node's), never the building's.
 /// </summary>
+/// <param name="NodeId">-1 when a stand was found (<paramref name="Spot"/> is non-null) — the
+/// caller resolves the graph node for the stand itself, the same way any other gate
+/// destination does. Only set to a real node id on the no-stand-in-range fallback, where
+/// <paramref name="Spot"/> is null and this IS the destination node.</param>
 public sealed record PlaceDestination(AirportFeature Feature, ParkingSpot? Spot, int NodeId, double Lat, double Lon, double HeadingDeg, double DistanceMetres);
 
 /// <summary>
@@ -33,7 +37,8 @@ public static class FeatureDestinationResolver
         FeatureKind.Fuel => type == 16,
         FeatureKind.Cargo => type is 6 or 7,
         FeatureKind.Terminal or FeatureKind.Concourse => type is 9 or 10 or 11 or 13 or 14,
-        _ => true,
+        FeatureKind.DeicePad => true,
+        _ => true, // unlisted routable kinds (currently none beyond the above): nearest stand of any type
     };
 
     public static PlaceDestination? Resolve(AirportFeature feature, IReadOnlyList<ParkingSpot> spots, Func<double, double, NearestNode?> nearestNode)

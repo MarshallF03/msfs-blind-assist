@@ -2774,7 +2774,7 @@ public class TaxiAssistForm : Form
     {
         _announcer.Announce(cmbDestination.Items.Count > 0
             ? $"{cmbDestination.Items.Count} places listed."
-            : $"No places to route to at {_currentIcao}. Open Alt+L to hear what is around you.");
+            : $"No places to route to at {_currentIcao}.");
     }
 
     /// <summary>The gate-list source token for the loaded airport — see
@@ -2980,7 +2980,7 @@ public class TaxiAssistForm : Form
         // AnnouncePlacesReady speaks the follow-up once the warm-up lands; speaking "No places…"
         // here too would have both announcements talking over each other.
         if (cmbDestType.SelectedIndex == 4 && cmbDestination.Items.Count == 0 && _placesWarmingIcao == null)
-            _announcer.AnnounceImmediate($"No places to route to at {_currentIcao}. Open Alt+L to hear what is around you.");
+            _announcer.AnnounceImmediate($"No places to route to at {_currentIcao}.");
 
         // Entering gate mode: kick a traffic sweep and rebuild once it lands, so the
         // occupied-stand filter works on the first list rather than only after the pilot

@@ -719,8 +719,10 @@ plus the installed scenery package's own placement data.
   feature at their placement centroid. **A raw model name (`KTIW_*`,
   `concourse_a_02`) never reaches speech** — only the classifier's human-text
   output does. Results are cached on disk (see Settings & caching below); the
-  scan runs once per package in the background at airport load, never on the
-  UI thread and never on a position update.
+  scan is LAZY — it runs on the first `Alt+L` / `Ctrl+Shift+L` / Place
+  destination lookup / monitor catalog build for an airport, not at airport
+  load, on a thread-pool thread and never on the UI thread or a position
+  update.
 - **`GsxTerminalFeatureSource`** groups `ParkingSpotSource.GetSelectableGates`
   entries by their `TerminalName` into `Terminal`/`Concourse` features —
   never from the graph.
@@ -745,7 +747,8 @@ timer tick.
 ### `Alt+L` — Look around
 
 Ground-only, same `_lastOnGround` gate and "In flight." answer as Where Am I.
-One queued utterance from `SurroundingsReport.Compose`:
+One `AnnounceImmediate` utterance from `SurroundingsReport.Compose`, same as
+Where Am I:
 
 ```
 {Where-Am-I line}. {Zone}. {Feature 1}, {direction}, {distance}. … (up to 4)

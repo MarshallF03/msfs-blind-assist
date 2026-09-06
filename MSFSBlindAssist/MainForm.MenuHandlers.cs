@@ -223,6 +223,12 @@ public partial class MainForm
         if (surroundingsMonitor != null)
             surroundingsMonitor.Enabled = settings.SurroundingsCalloutsEnabled;
 
+        // SceneryIndexEnabled / TaxiAugmentEnabled feed the feature list every cached
+        // AirportFeatureCatalog was built from, but flipping either doesn't move the
+        // gate-list version token the cache keys on — clear it so the very next Alt+L
+        // reflects the new setting instead of serving a catalog built under the old one.
+        surroundingsCache.Clear();
+
         // VATSIM: install or refresh the vPilot plugin and start/stop the pipe server.
         var vatsimInstall = vatsimService?.ApplySettings(settings);
         if (vatsimInstall != null)

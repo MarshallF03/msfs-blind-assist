@@ -61,7 +61,7 @@ public sealed class AirportFeatureCatalog
             int i = kept.FindIndex(k => SameFeature(k, f));
             if (i < 0) { kept.Add(f); continue; }
             var winner = kept[i];
-            if (winner.Footprint == null && f.Footprint != null || winner.Detail == null && f.Detail != null)
+            if ((winner.Footprint == null && f.Footprint != null) || (winner.Detail == null && f.Detail != null))
             {
                 kept[i] = new AirportFeature
                 {

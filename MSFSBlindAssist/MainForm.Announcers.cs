@@ -1796,7 +1796,11 @@ public partial class MainForm
     /// so every caller reaches this on a THREAD-POOL thread (a Task.Run started by the Alt+L /
     /// Ctrl+Shift+L hotkey handlers, or by AirportSurroundingsMonitor's own background build).
     /// NEVER on the UI thread and NEVER from a per-frame position update — a fresh
-    /// GateDataSource per call for the same reason ParkingSpotSupplier builds one.
+    /// GateDataSource per call for the same reason ParkingSpotSupplier builds one, but only
+    /// ONE build for the whole call (shared between the named-spots and selectable-gates
+    /// reads below) — the "never share a GateDataSource across threads" rule is about the UI
+    /// thread's own per-ICAO caches, not about paying for a second build on this same
+    /// thread-pool call.
     /// </summary>
     private IReadOnlyList<MSFSBlindAssist.Navigation.Surroundings.AirportFeature> BuildSurroundingsFeatures(string icao)
     {
@@ -1804,10 +1808,11 @@ public partial class MainForm
         if (provider == null) return Array.Empty<MSFSBlindAssist.Navigation.Surroundings.AirportFeature>();
         var features = new List<MSFSBlindAssist.Navigation.Surroundings.AirportFeature>();
 
+        var gateDataSource = BuildGateDataSource();
         var facilities = (provider as MSFSBlindAssist.Database.IAirportFacilitiesProvider)?.GetAirportFacilities(icao);
-        var named = MSFSBlindAssist.Services.ParkingSpotSource.GetNamedSpots(provider, BuildGateDataSource(), icao);
+        var named = MSFSBlindAssist.Services.ParkingSpotSource.GetNamedSpots(provider, gateDataSource, icao);
         features.AddRange(MSFSBlindAssist.Navigation.Surroundings.NavdataFeatureSource.Read(named, facilities));
-        var selectable = MSFSBlindAssist.Services.ParkingSpotSource.GetSelectableGates(provider, BuildGateDataSource(), icao);
+        var selectable = MSFSBlindAssist.Services.ParkingSpotSource.GetSelectableGates(provider, gateDataSource, icao);
         features.AddRange(MSFSBlindAssist.Navigation.Surroundings.GsxTerminalFeatureSource.Read(selectable));
         if (_augmentingProvider != null)
             features.AddRange(_augmentingProvider.GetOnlineFeatures(icao, facilities));
@@ -1861,7 +1866,8 @@ public partial class MainForm
                 }
                 catch (Exception ex)
                 {
-                    announcement = $"Surroundings lookup failed. {ex.Message}";
+                    Log.Warn("Surroundings", $"look-around failed: {ex.Message}");
+                    announcement = "Surroundings lookup failed.";
                 }
 
                 SafeBeginInvoke(() => announcer.AnnounceImmediate(announcement));
@@ -1910,7 +1916,11 @@ public partial class MainForm
                         }
                     }
                 }
-                catch (Exception ex) { failure = $"Surroundings lookup failed. {ex.Message}"; }
+                catch (Exception ex)
+                {
+                    Log.Warn("Surroundings", $"surroundings window build failed: {ex.Message}");
+                    failure = "Surroundings lookup failed.";
+                }
 
                 void Show()
                 {

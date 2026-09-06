@@ -88,6 +88,17 @@ public sealed class SceneryPackageIndexer
             var placements = new List<ScenePlacement>();
             foreach (var bgl in Directory.EnumerateFiles(dir, "*.bgl", SearchOption.AllDirectories))
             {
+                // Asobo's base ModelLib BGLs run 1.2-1.4 GB and OOM the Latin-1 string reader
+                // below on a full ReadAllBytes; Community packages this indexer actually needs
+                // to read are measured at ≤ ~100 MB, so 600 MB is a generous ceiling that
+                // never trims a real Community package and always skips the base libs.
+                long size = new FileInfo(bgl).Length;
+                if (size > 600L * 1024 * 1024)
+                {
+                    Log.Warn("SceneryIndex", $"skipping {bgl}: {size / (1024 * 1024)} MB exceeds the 600 MB reader limit");
+                    continue;
+                }
+
                 byte[] bytes = File.ReadAllBytes(bgl);
                 foreach (var kv in ModelLibNameReader.Read(bytes)) names[kv.Key] = kv.Value;
                 placements.AddRange(BglPlacementReader.Read(bytes));

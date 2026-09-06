@@ -12,6 +12,11 @@ namespace MSFSBlindAssist.Services;
 /// a background build kicked off from a timer tick), NEVER on the UI thread and NEVER from a
 /// per-frame position update. TryGetCached() is the non-building counterpart for a UI-thread
 /// timer that must not itself trigger that build.
+///
+/// Two explicit Clear() sites exist beside the token-based invalidations above: MainForm's
+/// RefreshDatabaseProvider (a database switch changes which airport data every catalog was
+/// built from) and ApplyRuntimeSettings (toggling SceneryIndexEnabled/TaxiAugmentEnabled must
+/// take effect on the next Alt+L rather than serving a catalog built under the old setting).
 /// </summary>
 public sealed class SurroundingsCatalogCache
 {

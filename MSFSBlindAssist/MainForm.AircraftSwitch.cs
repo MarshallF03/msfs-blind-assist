@@ -1120,6 +1120,13 @@ public partial class MainForm
             taxiAssistForm = null;
         }
 
+        // Every cached AirportFeatureCatalog was built from the OLD provider's navdata/GSX
+        // reads; a database switch changes what those reads return but moves neither the
+        // gate-list token nor anything else SurroundingsCatalogCache's staleness check
+        // watches, so without this an Alt+L after a switch kept describing the previous
+        // database's stands and buildings for the rest of the session.
+        surroundingsCache.Clear();
+
         UpdateDatabaseStatusDisplay();
     }
 

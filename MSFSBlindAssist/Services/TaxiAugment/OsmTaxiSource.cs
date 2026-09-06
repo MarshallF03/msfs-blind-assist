@@ -90,25 +90,36 @@ public sealed class OsmTaxiSource : ITaxiDataSource
                $"node[\"aeroway\"=\"gate\"]{around}" +
                $"way[\"aeroway\"=\"gate\"]{around}" +
                $"node[\"aeroway\"=\"holding_position\"]{around}" +
-               FeatureClauses("(area.ad)") +
+               FeatureClauses("(area.ad)", includeNamedBuildings: true) +
                ");out tags geom center;";
     }
 
     /// <summary>Feature-only query for an aerodrome OSM has not tagged with an icao= area; the
-    /// caller bbox-filters the result against the navdata airport extent (AirportFacilities).</summary>
+    /// caller bbox-filters the result against the navdata airport extent (AirportFacilities).
+    /// Omits the two generic named-office/named-building clauses — unlike the aerodrome-scoped
+    /// query above, this one is scoped only by an "around" radius with no area to bound it, so
+    /// those two clauses would return every named office and building within 3 km of the point,
+    /// most of them nothing to do with the airport, for a query that already has to run without
+    /// the free area-membership filter Overpass provides for a tagged aerodrome.</summary>
     internal static string BuildFeatureFallbackQuery(double lat, double lon)
     {
         string around = string.Format(CultureInfo.InvariantCulture, "(around:3000,{0:0.######},{1:0.######})", lat, lon);
-        return "[out:json][timeout:30];(" + FeatureClauses(around) + ");out tags geom center;";
+        return "[out:json][timeout:30];(" + FeatureClauses(around, includeNamedBuildings: false) + ");out tags geom center;";
     }
 
-    private static string FeatureClauses(string scope) =>
-        $"nwr[\"aeroway\"~\"^(terminal|hangar|apron|tower|control_tower|fuel|helipad)$\"]{scope};" +
-        $"nwr[\"building\"~\"^(hangar|terminal)$\"]{scope};" +
-        $"nwr[\"man_made\"=\"tower\"][\"tower:type\"=\"aircraft_control\"]{scope};" +
-        $"nwr[\"amenity\"~\"^(fuel|fire_station)$\"]{scope};" +
-        $"nwr[\"office\"][\"name\"]{scope};" +
-        $"nwr[\"building\"][\"name\"]{scope};";
+    private static string FeatureClauses(string scope, bool includeNamedBuildings)
+    {
+        string clauses =
+            $"nwr[\"aeroway\"~\"^(terminal|hangar|apron|tower|control_tower|fuel|helipad)$\"]{scope};" +
+            $"nwr[\"building\"~\"^(hangar|terminal)$\"]{scope};" +
+            $"nwr[\"man_made\"=\"tower\"][\"tower:type\"=\"aircraft_control\"]{scope};" +
+            $"nwr[\"amenity\"~\"^(fuel|fire_station)$\"]{scope};";
+        if (includeNamedBuildings)
+            clauses +=
+                $"nwr[\"office\"][\"name\"]{scope};" +
+                $"nwr[\"building\"][\"name\"]{scope};";
+        return clauses;
+    }
 
     public async Task<AirportTaxiData?> FetchAsync(string icao, double lat, double lon, CancellationToken ct)
     {
