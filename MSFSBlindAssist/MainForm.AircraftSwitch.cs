@@ -103,6 +103,7 @@ public partial class MainForm
             "HS_787" => new HorizonSim787Definition(),
             "HW_A330" => new HeadwindA330Definition(),
             "IFLY_737MAX8" => new IFly737MAXDefinition(),
+            "FLYSIMWARE_LJ35A" => new Aircraft.Learjet35.FlysimwareLearjet35ADefinition(),
             // Future aircraft will be added here
             _ => new FlyByWireA320Definition() // Default to A320
         };
@@ -922,6 +923,10 @@ public partial class MainForm
             DisposeIFlyForms();
         }
 
+        // The Learjet owns a monitor manager and Coherent display windows; drop them on the way out.
+        if (oldAircraft is Aircraft.Learjet35.FlysimwareLearjet35ADefinition && oldAircraft != newAircraft)
+            DisposeLj35Forms(oldAircraft);
+
         // Starting the SDK bridge is a no-op unless the new aircraft is the iFly.
         StartIFlySdkBridge();
 
@@ -979,6 +984,7 @@ public partial class MainForm
         horizonSim787MenuItem.Checked = false;
         headwindA330MenuItem.Checked = false;
         ifly737MaxMenuItem.Checked = false;
+        lj35MenuItem.Checked = false;
 
         // Set the check on the current aircraft's menu item.
         // NOTE: HeadwindA330Definition derives from FlyByWireA320Definition, so it MUST
@@ -1014,6 +1020,10 @@ public partial class MainForm
         else if (currentAircraft is IFly737MAXDefinition)
         {
             ifly737MaxMenuItem.Checked = true;
+        }
+        else if (currentAircraft is Aircraft.Learjet35.FlysimwareLearjet35ADefinition)
+        {
+            lj35MenuItem.Checked = true;
         }
     }
 

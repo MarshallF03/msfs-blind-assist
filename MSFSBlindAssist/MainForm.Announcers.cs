@@ -175,6 +175,10 @@ public partial class MainForm
         // door, …) all announce from INSIDE ProcessSimVarUpdate, so a PMDG Announcement Monitor
         // un-tick never reached them through the generic PMDG gate further down — "Elevator Trim"
         // was a dead checkbox on the 777. Same wrap, same reason; same PMDG_ prefix test as below.
+        // The Learjet announces its derived annunciator lamps from INSIDE ProcessSimVarUpdate,
+        // the same shape as the HS787 and the iFly — same wrap, same reason.
+        bool lj35Muted = currentAircraft.AircraftCode == "FLYSIMWARE_LJ35A" &&
+            Settings.SettingsManager.Current.LJ35DisabledMonitorVariablesSet.Contains(e.VarName);
         bool pmdgMuted = currentAircraft.AircraftCode.StartsWith("PMDG_", StringComparison.Ordinal) &&
             Settings.SettingsManager.Current.PMDGDisabledMonitorVariablesSet.Contains(e.VarName);
         // UI-set echo suppression — applies to EVERY aircraft, not just the HS787 (was the bug).
@@ -190,7 +194,7 @@ public partial class MainForm
         // guards the non-def-handled announce path and its own baseline accuracy.
         bool uiEcho = _uiSetEcho.TryGetValue(e.VarName, out var ue)
             && Environment.TickCount64 - ue.tick < UiSetEchoSuppressMs;
-        bool suppressDefAnnounce = hs787Muted || a32nxMuted || iflyMuted || pmdgMuted || uiEcho;
+        bool suppressDefAnnounce = hs787Muted || a32nxMuted || iflyMuted || pmdgMuted || lj35Muted || uiEcho;
         bool prevSuppressed = announcer.Suppressed;
         if (suppressDefAnnounce) announcer.Suppressed = true;
         bool wasProcessedByAircraft;
@@ -337,6 +341,14 @@ public partial class MainForm
                 // on the generic path.
                 if (currentAircraft.AircraftCode == "IFLY_737MAX8" &&
                     Settings.SettingsManager.Current.IFlyDisabledMonitorVariablesSet.Contains(e.VarName))
+                {
+                    return; // Skip announcement for disabled variable
+                }
+
+                // Check if disabled in the Learjet 35A Monitor Manager (plain switches and
+                // selectors on the generic path; the lamps are covered by the wrap above).
+                if (currentAircraft.AircraftCode == "FLYSIMWARE_LJ35A" &&
+                    Settings.SettingsManager.Current.LJ35DisabledMonitorVariablesSet.Contains(e.VarName))
                 {
                     return; // Skip announcement for disabled variable
                 }

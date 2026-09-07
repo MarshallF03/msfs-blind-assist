@@ -145,6 +145,7 @@ public partial class MainForm : Form
     private Forms.IFly737.IFlyEfbForm? iflyEfbForm;
 
     private Forms.IFly737.IFly737MonitorManagerForm? iflyMonitorManagerForm;
+    private Forms.Learjet35.Lj35MonitorManagerForm? lj35MonitorManagerForm;
 
     private TakeoffAssistManager takeoffAssistManager = null!;
 

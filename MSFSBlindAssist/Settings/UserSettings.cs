@@ -315,6 +315,17 @@ public class UserSettings
         [JsonIgnore]
         public HashSet<string> IFlyDisabledMonitorVariablesSet { get; private set; } = new HashSet<string>();
 
+        // Auto-announced Flysimware Learjet 35A variables the user has muted via the Learjet
+        // Monitor Manager (Ctrl+M, Lj35MonitorManagerForm). Consulted in MainForm.OnSimVarUpdated
+        // when AircraftCode == "FLYSIMWARE_LJ35A" — both at the generic gate AND via the
+        // Suppressed-wrap, because the derived annunciator lamps announce from INSIDE
+        // ProcessSimVarUpdate (the HS787 pattern). Persisted across sessions.
+        public List<string> LJ35DisabledMonitorVariables { get; set; } = new List<string>();
+
+        /// <summary>Runtime-only HashSet sidecar of <see cref="LJ35DisabledMonitorVariables"/>. See <see cref="FenixDisabledMonitorVariablesSet"/>.</summary>
+        [JsonIgnore]
+        public HashSet<string> LJ35DisabledMonitorVariablesSet { get; private set; } = new HashSet<string>();
+
         // Announce each 1,000-foot crossing while airborne ("5,000 feet", …). Default on.
         public bool AltitudeCalloutsEnabled { get; set; } = true;
 
@@ -537,6 +548,7 @@ public class UserSettings
         HS787DisabledMonitorVariablesSet = new HashSet<string>(HS787DisabledMonitorVariables);
         A32NXDisabledMonitorVariablesSet = new HashSet<string>(A32NXDisabledMonitorVariables);
         IFlyDisabledMonitorVariablesSet = new HashSet<string>(IFlyDisabledMonitorVariables);
+        LJ35DisabledMonitorVariablesSet = new HashSet<string>(LJ35DisabledMonitorVariables);
     }
 
     /// <summary>
@@ -611,6 +623,7 @@ public class UserSettings
             HS787DisabledMonitorVariables = new List<string>(HS787DisabledMonitorVariables),
             A32NXDisabledMonitorVariables = new List<string>(A32NXDisabledMonitorVariables),
             IFlyDisabledMonitorVariables = new List<string>(IFlyDisabledMonitorVariables),
+            LJ35DisabledMonitorVariables = new List<string>(LJ35DisabledMonitorVariables),
             AltitudeCalloutsEnabled = AltitudeCalloutsEnabled,
             MCDUUseAlternateLSKKeys = MCDUUseAlternateLSKKeys,
             PMDGEnhancedDistanceMode = PMDGEnhancedDistanceMode,
