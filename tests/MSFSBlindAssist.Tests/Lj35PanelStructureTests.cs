@@ -71,17 +71,7 @@ public class Lj35PanelStructureTests
     /// Building a panel takes it off the list; the mirror assertion fails when a built panel is
     /// still listed, so the list cannot go stale in either direction.
     /// </summary>
-    public static readonly string[] NotBuiltYet =
-    {
-        "Reverser Panel", "Fire Protection", "FC-530 Autopilot", "Annunciator Panel",
-        "Pilot Flight Instruments", "Standby Attitude", "Davtron Clock", "Landing Gear",
-        "Copilot Flight Instruments", "Engine Instruments", "GNS 530", "GTX 345 Transponder",
-        "Pilot Lighting", "Copilot Lighting", "Pilot Audio Panel", "Anti-Ice",
-        "Fuel Computers and Avionics", "Engine Start", "Systems Test", "Lower Center Switches",
-        "Pressurization", "Climate and Exterior Lights", "Thrust and Flaps", "Fuel",
-        "Trim and Steering", "Yaw Damper", "Collins Radios", "Yoke Switches", "Tablet",
-        "Cabin Door", "Cabin", "Ground Equipment", "Payload", "Aircraft Options"
-    };
+    public static readonly string[] NotBuiltYet = Array.Empty<string>();
 
     [Fact]
     public void EveryPanelInTheStructureIsBuiltOrKnownUnbuilt()
