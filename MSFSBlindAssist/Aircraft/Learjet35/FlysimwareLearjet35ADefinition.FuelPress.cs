@@ -21,6 +21,15 @@ public partial class FlysimwareLearjet35ADefinition
         AddTyped(v, "LJ35_CABIN_ALT_SET", "Selected Cabin Altitude", "feet", "Minus 1000 to 10000.", "LJ35_CABIN_ALT_SEL");
         AddTyped(v, "LJ35_CABIN_RATE_SET", "Selected Cabin Rate", "feet per minute", "175 to 2500.", "LJ35_CABIN_RATE_SEL");
         AddThreeWay(v, "LJ35_CABIN_ROCKER", "LEAR_CABIN_PRESS_ROCKER", "Manual Cabin Control", "Up", "Off", "Down", "Manual mode only; springs back.");
+        // The bleed-air circuit (systems.cfg circuit 43, AIR_BL, on the left essential bus).
+        // The vendor's Pressurization.xml takes its "no pressurization" branch whenever this
+        // circuit is unpowered, and NOTHING in the cockpit drives it: measured live 2026-09-08
+        // with the switch found OFF at FL350 and the cabin following the aircraft up until the
+        // circuit was toggled by hand. Exposed so a pilot can see and set it; it also reads
+        // off while the essential bus is dead (generators off line), which is the other way
+        // to lose pressurization.
+        AddSimSwitch(v, "LJ35_BLEED_CIRCUIT", "CIRCUIT SWITCH ON:43", "Bleed Air Circuit", "Off", "On",
+            "Unpowered means no pressurization. Needs the left essential bus.");
         AddReadout(v, "LJ35_CABIN_ALT", "LEAR_CABIN_ALT_NEEDLE", "Cabin Altitude", "feet", "F0");
         AddReadout(v, "LJ35_CABIN_DIFF", "LEAR_CABIN_ALT_DIFF_NEEDLE", "Cabin Differential", "psi", "F1");
         AddReadout(v, "LJ35_CABIN_RATE", "XMLVAR_LEAR_CABIN_ALTITUDE_RATE", "Cabin Rate", "feet per minute", "F0");
@@ -63,7 +72,7 @@ public partial class FlysimwareLearjet35ADefinition
 
     private static readonly List<string> PressurizationControls = new()
     {
-        "LJ35_CABIN_AIR", "LJ35_CABIN_AUTO", "LJ35_CABIN_ALT_SET", "LJ35_CABIN_RATE_SET", "LJ35_CABIN_ROCKER"
+        "LJ35_CABIN_AIR", "LJ35_CABIN_AUTO", "LJ35_CABIN_ALT_SET", "LJ35_CABIN_RATE_SET", "LJ35_CABIN_ROCKER", "LJ35_BLEED_CIRCUIT"
     };
     private static readonly List<string> PressurizationDisplay = new()
     {
@@ -91,6 +100,11 @@ public partial class FlysimwareLearjet35ADefinition
             case "LJ35_CABIN_ALT_SET": sc.SetLVar("XMLVAR_LEAR_CABIN_PRESSURE_KNOB_Position", Lj35Pressurization.AltitudeKnobPosition(value)); return true;
             case "LJ35_CABIN_RATE_SET": sc.SetLVar("XMLVAR_LEAR_CABIN_CLIMB_RATE_Position", Lj35Pressurization.RateKnobPosition(value)); return true;
             case "LJ35_CABIN_ROCKER": sc.SetLVar("GENERIC_Momentary_LEAR_CABIN_PRESS_ROCKER", value); return true;
+            case "LJ35_BLEED_CIRCUIT":
+                // A toggle, fired only when the switch disagrees with the pick (the same
+                // conditional the transponder circuit uses), so a repeated set cannot flip it back.
+                sc.ExecuteCalculatorCode($"(A:CIRCUIT SWITCH ON:43, Bool) {(value > 0.5 ? 0 : 1)} == if{{ 43 (>K:ELECTRICAL_CIRCUIT_TOGGLE) }}");
+                return true;
 
             case "LJ35_FUEL_SEL": sc.SetLVar("XMLVAR_LEAR_FUEL_SEL_Position", value); return true;
             case "LJ35_FUEL_RESET": Pulse(sc, "GENERIC_LEAR_FUEL_RESET"); return true;

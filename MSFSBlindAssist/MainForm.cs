@@ -578,6 +578,14 @@ public partial class MainForm : Form
         simConnectManager.SimulatorVersionDetected += OnSimulatorVersionDetected;
         simConnectManager.SimVarUpdated += OnSimVarUpdated;
         simConnectManager.ContinuousBatchDelivered += OnContinuousBatchDelivered;
+        // The standing GPS waypoint frame, forwarded to whichever definition is current; the
+        // definition decides whether it is a passing (see GpsWaypointSequencer) and checks its
+        // own Ctrl+M mute, because this runs outside the ProcessSimVarUpdate wrap.
+        simConnectManager.GpsWaypointReceived += (_, data) =>
+        {
+            try { currentAircraft?.OnGpsWaypointReceived(data, announcer); }
+            catch (Exception ex) { Log.Debug("MainForm", $"GPS waypoint hook: {ex.Message}"); }
+        };
         simConnectManager.TakeoffRunwayReferenceSet += OnTakeoffRunwayReferenceSet;
         simConnectManager.AircraftIcaoTypeDetected += OnAircraftIcaoTypeDetected;
 

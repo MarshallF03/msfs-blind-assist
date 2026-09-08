@@ -115,6 +115,27 @@ comes on line. The long form lives in this document.
   degrees to the GNS target when there is one, else to 1,500 ft, and the readout says which.
   V is the aeroplane's own vertical speed (MainForm's generic readout — the definition
   deliberately does not handle it); Shift+V is the FC-530 target.
+- **Waypoint passing call.** The same GPS frame drives "Passing SOXOM. Next VEKIN, 18 miles."
+  through `OnGpsWaypointReceived` (an `IAircraftDefinition` hook MainForm forwards for every
+  aircraft) and `GpsWaypointSequencer`, which announces a passing ONLY when the fix flown TO
+  has become the fix flown FROM — a Direct-To, a plan edit or a procedure load is not one.
+  One Ctrl+M row ("Waypoint Passing Call") mutes it; the row rides `GPS IS ACTIVE FLIGHT
+  PLAN`, a SimVar name no other Learjet key carries (the batch sorts by name). On a SID or
+  STAR the unit leaves the idents blank, so only enroute fixes are named today.
+- **Typed ident entry, Ctrl+T in the GNS window.** The agent's `typeIdent` finds the
+  `AlphaNumInput` component behind the visible ident field (a walk of the instrument's
+  object graph from its main screen — FSComponent attaches no instance to the DOM) and
+  calls its own `setValueFromOS`, the path the sim's on-screen keyboard uses, so the unit's
+  search and facility lookup run exactly as for a sighted pilot; `typed()` then reads back
+  what the unit resolved. Ctrl+Enter confirms, as with the knobs. Thirty knob clicks per
+  ident was the alternative.
+- **Bleed Air Circuit** on the Pressurization panel is systems.cfg circuit 43 (`AIR_BL`, left
+  essential bus). Nothing in the vendor's cockpit drives it, and `Pressurization.xml` takes
+  its "no pressurization" branch whenever it is unpowered — measured live 2026-09-08 at
+  FL350: both starter-generator switches left at Off after start, batteries at 12.4 V, the
+  left essential bus dead, the circuit switch off, the cabin following the aircraft up, and
+  the cabin altitude horn. The switch is exposed so it can be seen and set (a conditional
+  `ELECTRICAL_CIRCUIT_TOGGLE`); the readout also shows off while the bus is dead.
 - **The tablet** is exposed as panels (Tablet, Cabin, Ground Equipment, Payload, Aircraft
   Options) because every tablet control is a plain L:var; a scraped tablet window is a
   follow-up.

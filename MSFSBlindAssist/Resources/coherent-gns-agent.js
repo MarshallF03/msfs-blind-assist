@@ -331,11 +331,26 @@
     return (containsCursor(el) ? CURSOR : "") + s + (disabled ? " (unavailable)" : "");
   }
 
-  // "RUNWAY: 09-27" - a selector box on the WPT pages.
+  // "RUNWAY: 09-27" - a selector box on the WPT and procedure pages. The small knob OPENS a
+  // popup list under the box (a `dialog-box` inside the selector, hidden until then) and
+  // scrolls it; ENT picks; the box's own text changes only on ENT. So while the list is
+  // open the ITEMS are what the pilot is moving through, and the highlighted one is the
+  // cursor line - reading the closed box alone made every knob turn sound like nothing.
   function selector(el) {
     var label = el.querySelector(".waypoint-page-selector-label");
     var sel = el.querySelector(".waypoint-page-selector-selected");
-    return (containsCursor(el) ? CURSOR : "") + tidy(textOf(label) + ": " + textOf(sel || el));
+    var head = tidy(textOf(label) + ": " + textOf(sel || el));
+    var popout = el.querySelector(".dialog-box");
+    if (popout && visible(popout)) {
+      var lines = [head + ", choose:"];
+      var items = popout.querySelectorAll(".waypoint-page-selector-item");
+      for (var i = 0; i < items.length; i++) {
+        if (!visible(items[i])) continue;
+        lines.push((isCursor(items[i]) || containsCursor(items[i]) ? CURSOR : "") + textOf(items[i]));
+      }
+      return lines.join("\n");
+    }
+    return (containsCursor(el) ? CURSOR : "") + head;
   }
 
   // The GPS status satellite bar graph: one line, not twenty-eight.
@@ -550,11 +565,18 @@
     for (var j = 0; j < kids.length; j++) emit(kids[j], lines);
   }
 
+  // An atom may hand back several lines (an open selector list). A cursor mark that a
+  // one-row join left mid-line is hoisted to the front, where cursorLine() looks for it.
   function push(lines, s) {
-    s = tidy(s);
-    if (!s) return;
-    if (s === CURSOR.replace(/\s+$/, "")) return;
-    lines.push(s);
+    var parts = String(s || "").split("\n");
+    for (var i = 0; i < parts.length; i++) {
+      var t = tidy(parts[i]);
+      if (!t) continue;
+      if (t === CURSOR.replace(/\s+$/, "")) continue;
+      var at = t.indexOf(CURSOR);
+      if (at > 0) t = CURSOR + tidy(t.substring(0, at) + " " + t.substring(at + CURSOR.length));
+      lines.push(t);
+    }
   }
 
   // ------------------------------------------------------------- the layers
@@ -797,6 +819,110 @@
       return c === "_" ? "blank" : c;
     }
     return "";
+  };
+
+  // ---------------------------------------------------------- typed entry
+  //
+  // TYPE AN IDENT INTO THE FIELD UNDER THE CURSOR. This is the instrument's OWN keyboard
+  // path, not a shortcut around it: every AlphaNumInput is built with `enableKeyboard`
+  // and carries `setValueFromOS(text)` for the sim's on-screen keyboard, which writes each
+  // character through the same onSlotChanged the knob uses — so the database search, the
+  // autocomplete and the facility lookup all run exactly as they do for a sighted pilot.
+  // Thirty-odd knob clicks to spell one ident is the same aircraft made unusable; the
+  // knob path stays for anyone who wants it, and both end in the same component.
+  //
+  // The component instance is found by walking the instrument's object graph from its
+  // main screen (FSComponent attaches no instance to the DOM), matching on the `el` ref
+  // that points at the VISIBLE `.alpha-num-input` — the one whose slot carries the cursor
+  // when there is one, else the only visible one.
+  function findInput() {
+    var root = A.root();
+    var ms = root && root.mainScreen && root.mainScreen.instance;
+    if (!ms) return null;
+    var domTarget = null, anyVisible = null;
+    var inputs = document.querySelectorAll(".alpha-num-input");
+    for (var i = 0; i < inputs.length; i++) {
+      if (!visible(inputs[i])) continue;
+      anyVisible = anyVisible || inputs[i];
+      var slots = inputs[i].querySelectorAll(".alpha-num-slot");
+      for (var s = 0; s < slots.length; s++) if (isCursor(slots[s])) { domTarget = inputs[i]; break; }
+      if (!domTarget && containsCursor(inputs[i])) domTarget = inputs[i];
+      if (domTarget) break;
+    }
+    var want = domTarget || anyVisible;
+    if (!want) return null;
+    var seen = [], queue = [{ o: ms, d: 0 }];
+    while (queue.length) {
+      var cur = queue.shift();
+      var o = cur.o;
+      if (!o || typeof o !== "object" || cur.d > 9) continue;
+      if (seen.indexOf(o) >= 0) continue;
+      seen.push(o);
+      if (seen.length > 20000) break;
+      // ⚠️ A NodeReference's `instance` GETTER THROWS while it is unset ("Instance was
+      // null"), so every ref is read through its `_instance` field and never the getter —
+      // the first version of this walk died on the first unrendered ref it met.
+      try {
+        if (typeof o.setValueFromOS === "function" && typeof o.onSlotChanged === "function" &&
+            o.el && o.el._instance === want) return o;
+      } catch (e) { }
+      var names;
+      try { names = Object.keys(o); } catch (e2) { continue; }
+      for (var k = 0; k < names.length; k++) {
+        var v;
+        try { v = o[names[k]]; } catch (e3) { continue; }
+        if (!v || typeof v !== "object") continue;
+        if (v instanceof Node) continue;
+        queue.push({ o: v, d: cur.d + 1 });
+        var inst = null;
+        try { inst = v._instance; } catch (e5) { inst = null; }
+        if (inst && typeof inst === "object" && !(inst instanceof Node)) queue.push({ o: inst, d: cur.d + 1 });
+      }
+    }
+    return null;
+  }
+
+  A.typeIdent = function (str) {
+    var s = String(str || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!s) return "nothing to type";
+    var inp;
+    try { inp = findInput(); } catch (e) { return "error " + (e && e.message ? e.message : e); }
+    if (!inp) return "no field";
+    var len = inp.props && inp.props.length ? inp.props.length : 5;
+    if (s.length > len) s = s.substring(0, len);
+    // setValueFromOS also touches the keyboard's hidden <input>, which the WPT pages never
+    // render (measured: "Instance was null" on the airport page). Its per-slot body is
+    // onSlotChanged(i, char) — the same call — so that is used directly; the value, the
+    // onChanged search and the slot focus all happen exactly as they would for the keyboard.
+    try {
+      for (var i = 0; i < s.length; i++) inp.onSlotChanged(i, s.charAt(i));
+      return "ok " + s;
+    } catch (e4) { return "error " + (e4 && e4.message ? e4.message : e4); }
+  };
+
+  // What the unit made of the ident, once its search has run: the field as it now reads
+  // and the facility the dialog resolved beside it (Direct-To: region, name, city; the
+  // flight-plan insert dialog and the WPT pages: their own info blocks).
+  A.typed = function () {
+    var out = [];
+    var inputs = document.querySelectorAll(".alpha-num-input");
+    for (var i = 0; i < inputs.length; i++) {
+      if (!visible(inputs[i])) continue;
+      var t = alphaNum(inputs[i]).replace(/, cursor on .*$/, "").replace(/_+$/, "");
+      if (t) { out.push(t); break; }
+    }
+    var sel = ".dto-waypoint-info-region, .dto-waypoint-info-name, .dto-waypoint-info-city, .waypoint-info-region, .waypoint-info-name, .waypoint-info-city, .waypoint-airport-location, .waypoint-vor-location, .waypoint-ndb-location, .waypoint-intersection-region";
+    var infos = document.querySelectorAll(sel);
+    for (var k = 0; k < infos.length; k++) {
+      if (!visible(infos[k])) continue;
+      // The block's label ("FACILITY & CITY NAME: ...") is dropped; a blank value means the
+      // unit found nothing for that ident on this page (a VOR typed on the airport page).
+      var v = textOf(infos[k]).replace(/^[A-Z &,]+:\s*/, "");
+      if (v && v !== "blank" && !/^(blank[ ,]*)+$/.test(v) && out.indexOf(v) < 0) out.push(v);
+    }
+    if (!out.length) return "nothing entered";
+    if (out.length === 1) return out[0] + ", no match on this page";
+    return out.join(", ");
   };
 
   // The standby frequency of the pane the tuning knob is on.

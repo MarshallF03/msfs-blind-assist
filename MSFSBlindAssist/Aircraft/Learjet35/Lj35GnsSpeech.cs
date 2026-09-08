@@ -12,6 +12,29 @@ public enum Lj35GnsKeyKind
 }
 
 /// <summary>
+/// The ident a pilot types for the GNS window's Ctrl+T (typed waypoint entry): letters and
+/// digits only, one to six characters (an airport is four, a fix five, a VOR up to three; the
+/// unit's own field holds five, six on the 430's longer boxes). Lower case is accepted and
+/// upper-cased; anything else is refused with the reason, so a stray space or dash never
+/// reaches the instrument as a blank slot.
+/// </summary>
+public static class Lj35GnsIdent
+{
+    public const int MaxLength = 6;
+
+    public static (bool ok, string message, string ident) Validate(string? typed)
+    {
+        string s = (typed ?? string.Empty).Trim().ToUpperInvariant();
+        if (s.Length == 0) return (false, "Type an ident, letters and digits only", string.Empty);
+        if (s.Length > MaxLength) return (false, $"An ident is at most {MaxLength} characters", string.Empty);
+        foreach (char c in s)
+            if (c is < 'A' or > 'Z' && c is < '0' or > '9')
+                return (false, "Letters and digits only", string.Empty);
+        return (true, string.Empty, s);
+    }
+}
+
+/// <summary>
 /// The spoken feedback after a GNS bezel key, composed from the agent's state string.
 ///
 /// The window used to announce the KEY ("next page", "enter") and leave the pilot to

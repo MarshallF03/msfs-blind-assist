@@ -101,6 +101,7 @@ public sealed class Lj35GnsDisplayForm : Form
                 "Shift with Enter pushes the cursor, control with Enter is ENT. " +
                 "Control with D direct to, F flight plan, P procedures, E menu, L clear, G message, O OBS, C CDI, V VNAV. " +
                 "Flight plan, procedures and VNAV are their own groups: control L leaves them. " +
+                "Control with T types an ident into the field under the cursor, then control Enter confirms it. " +
                 "Control with Page Up and Page Down is the map range. " +
                 "Alt with up and down is the radio megahertz, Alt with left and right the kilohertz, Alt with Enter toggles COM and NAV tuning, " +
                 "Alt with Shift and Enter swaps COM, Control Alt Shift Enter swaps NAV. F5 refreshes; Escape closes. Auto-updates."
@@ -197,12 +198,56 @@ public sealed class Lj35GnsDisplayForm : Form
             Close();
             return true;
         }
+        if (keyData == (Keys.Control | Keys.T))
+        {
+            TypeIdent();
+            return true;
+        }
         if (BezelKeys.TryGetValue(keyData, out var key))
         {
             _ = PressAsync(key.Event, key.Spoken, key.Kind);
             return true;
         }
         return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    /// <summary>
+    /// Ctrl+T: type an ident into the field under the cursor instead of spelling it with the
+    /// knobs. The agent hands the text to the instrument's OWN keyboard path
+    /// (AlphaNumInput.setValueFromOS, the same one the sim's on-screen keyboard uses), so the
+    /// unit's search and facility lookup run exactly as for a sighted pilot; after they have
+    /// had a moment the window speaks what the unit resolved ("EGKK, LONDON GATWICK, U KINGDOM")
+    /// and the pilot confirms with Ctrl+Enter as usual. With no ident field on screen the
+    /// dialog is refused up front rather than typing into nothing.
+    /// </summary>
+    private void TypeIdent()
+    {
+        var dialog = new ValueInputForm("Type an ident", "ident", "letters and digits, up to six",
+            _announcer, input => { var r = Lj35GnsIdent.Validate(input); return (r.ok, r.message); });
+        dialog.ShowCancelButton = true;
+        if (dialog.ShowDialog(this) != DialogResult.OK) { _text.Focus(); return; }
+        string ident = Lj35GnsIdent.Validate(dialog.InputValue).ident;
+        _text.Focus();
+        _ = TypeIdentAsync(ident);
+    }
+
+    private async Task TypeIdentAsync(string ident)
+    {
+        string result = await _client.InvokeAsync($"window.__MSFSBA_GNS ? __MSFSBA_GNS.typeIdent('{ident}') : ''");
+        if (_disposed) return;
+        if (!result.StartsWith("ok", StringComparison.Ordinal))
+        {
+            _announcer.AnnounceImmediate(result.Contains("no field", StringComparison.Ordinal)
+                ? "No ident field on screen. Open Direct To with control D, or put the cursor on a waypoint field first."
+                : "Could not type into the display.");
+            return;
+        }
+        // The unit's search is debounced; give it a beat before reading what it resolved.
+        await Task.Delay(900);
+        if (_disposed) return;
+        string typed = await _client.InvokeAsync("window.__MSFSBA_GNS ? __MSFSBA_GNS.typed() : ''");
+        _announcer.AnnounceImmediate(string.IsNullOrWhiteSpace(typed) ? ident + " typed." : typed);
+        _ = _client.ScrapeNowAsync();
     }
 
     /// <summary>

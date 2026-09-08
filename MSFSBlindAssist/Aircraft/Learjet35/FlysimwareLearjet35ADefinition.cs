@@ -138,7 +138,15 @@ public partial class FlysimwareLearjet35ADefinition : BaseAircraftDefinition
         Add(BuildFuelPressVariables());
         Add(BuildPedestalVariables());
         Add(BuildTabletVariables());
+        Add(BuildWaypointVariables());
         return vars;
+    }
+
+    /// <inheritdoc />
+    public override void ResetAnnouncementBaselines()
+    {
+        base.ResetAnnouncementBaselines();
+        ResetWaypointBaseline();
     }
 
     public override Dictionary<string, List<string>> GetPanelDisplayVariables() => new()

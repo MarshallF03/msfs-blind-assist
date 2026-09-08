@@ -15,6 +15,8 @@ DISPLAY WINDOWS (direct Alt keys, no output mode)
     Ctrl+Enter               ENT
     Ctrl+D  Direct-to   Ctrl+F  FPL   Ctrl+P  PROC   Ctrl+E  MENU   Ctrl+L  CLR
     Ctrl+G  MSG         Ctrl+O  OBS   Ctrl+C  CDI    Ctrl+V  VNAV
+    Ctrl+T                   type an ident into the field under the cursor (Direct-to, a
+                             flight plan insert, a waypoint page); Ctrl+Enter then confirms it
     Ctrl+PageUp / Ctrl+PageDown   map range out and in
     Alt+Up / Alt+Down        radio megahertz          Alt+Left / Alt+Right   radio kilohertz
     Alt+Enter                toggle COM and NAV tuning

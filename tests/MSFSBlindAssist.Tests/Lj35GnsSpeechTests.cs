@@ -62,6 +62,22 @@ public class Lj35GnsSpeechTests
         Assert.Equal("Page Menu. Cursor on Display NEXRAD?", Lj35GnsSpeech.Compose(Lj35GnsKeyKind.Button, Lj35GnsSpeech.Parse(Menu), "menu"));
     }
 
+    [Theory]
+    [InlineData("egkk", true, "EGKK")]
+    [InlineData(" TNT ", true, "TNT")]
+    [InlineData("DER09", true, "DER09")]
+    [InlineData("", false, "")]
+    [InlineData("EG KK", false, "")]
+    [InlineData("A-9", false, "")]
+    [InlineData("ABCDEFG", false, "")]
+    public void TypedIdentIsLettersAndDigitsUpToSix(string typed, bool ok, string ident)
+    {
+        var r = Lj35GnsIdent.Validate(typed);
+        Assert.Equal(ok, r.ok);
+        Assert.Equal(ident, r.ident);
+        if (!ok) Assert.NotEqual(string.Empty, r.message);
+    }
+
     [Fact]
     public void RadioKnobSaysTheStandbyFrequency()
     {
