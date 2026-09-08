@@ -51,7 +51,39 @@ public partial class FlysimwareLearjet35ADefinition
                         ? $"Mach target {N(ReadNow(sc, "LJ35_AP_MACH_VAR"), "0.00")}"
                         : $"Speed target {N(ReadNow(sc, "LJ35_AP_IAS_VAR"))} knots");
                 return true;
-            case HotkeyAction.ReadVerticalSpeed: RequestFCUVerticalSpeed(sc, ann); return true;
+            // V is what the aeroplane is DOING (MainForm's generic vertical-speed readout, so
+            // it is deliberately not handled here); Shift+V is the FC-530's target.
+            case HotkeyAction.ReadFCUVerticalSpeedFPA: RequestFCUVerticalSpeed(sc, ann); return true;
+
+            // ---- the GNS's flight plan, off the stock GPS SimVars the Working Title unit
+            // writes (D, Shift+D, Ctrl+W). Read from the standing one-second frame, never
+            // re-requested: see SimConnectManager.LastGpsWaypoint.
+            case HotkeyAction.ReadDistanceToDest:
+            {
+                var last = sc.LastGpsWaypoint;
+                ann.AnnounceImmediate(last == null
+                    ? "Destination information not available yet."
+                    : Services.GpsWaypointSequencer.ComposeDestination(last.Value));
+                return true;
+            }
+            case HotkeyAction.ReadNDWaypoint:
+            {
+                var last = sc.LastGpsWaypoint;
+                ann.AnnounceImmediate(last == null
+                    ? "Waypoint information not available yet."
+                    : Services.GpsWaypointSequencer.ComposeReadout(Services.GpsWaypointSequencer.Read(last.Value, null)));
+                return true;
+            }
+            case HotkeyAction.ReadDistanceToTOD:
+            {
+                var last = sc.LastGpsWaypoint;
+                double? routeNm = null;
+                if (last != null && last.Value.IsActiveFlightPlan > 0.5 && last.Value.RouteEteSeconds >= 1 && last.Value.GroundSpeedKnots > 1)
+                    routeNm = last.Value.RouteEteSeconds * last.Value.GroundSpeedKnots / 3600.0;
+                double alt = ReadNow(sc, "LJ35_ALT_MSL") ?? 0;
+                ann.AnnounceImmediate(Lj35Descent.ComposeTopOfDescent(alt, ReadNow(sc, "LJ35_GPS_TARGET_ALT"), routeNm));
+                return true;
+            }
 
             case HotkeyAction.ReadEngineRpm:
                 ann.AnnounceImmediate(

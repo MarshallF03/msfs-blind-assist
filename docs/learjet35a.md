@@ -103,6 +103,18 @@ comes on line. The long form lives in this document.
   NAV"; it was wrong, and it is why the bezel looked dead. And FPL, VNAV and PROC are
   DETACHED page groups in Working Title's implementation: inside them the large knob turns
   no page, and CLR (or the same button again) is the way back.
+- **The GNS flight plan on the hotkeys.** D (distance and time to the destination), Ctrl+W
+  (the TO-waypoint: ident, distance, bearing, time) and Shift+D (top of descent) read the
+  stock GPS SimVars the Working Title unit writes, through the one-second
+  `SimConnectManager.LastGpsWaypoint` frame and `Services/GpsWaypointSequencer` (ported from
+  the DA40 work — same Garmin SDK `GpsSynchronizer` underneath). Route distance to the
+  destination is never published; it is recovered from `GPS ETE × ground speed`, exactly.
+  ⚠️ The GNS has no top-of-descent point at all (its VNAV page is a vertical-speed-required
+  calculator, and `GPS TARGET ALTITUDE` is written only while that target is armed — measured
+  zero at FL350 with a 30-waypoint plan), so Shift+D is an ESTIMATE (`Lj35Descent`): three
+  degrees to the GNS target when there is one, else to 1,500 ft, and the readout says which.
+  V is the aeroplane's own vertical speed (MainForm's generic readout — the definition
+  deliberately does not handle it); Shift+V is the FC-530 target.
 - **The tablet** is exposed as panels (Tablet, Cabin, Ground Equipment, Payload, Aircraft
   Options) because every tablet control is a plain L:var; a scraped tablet window is a
   follow-up.

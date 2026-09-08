@@ -49,13 +49,18 @@ public partial class FlysimwareLearjet35ADefinition
         AddFlag(v, "LJ35_RADALT_CIRCUIT", "CIRCUIT ON:169", "Radio Altimeter Circuit", "Off", "On", simvar: true);
         AddSimReadout(v, "LJ35_GEAR_CENTER", "GEAR CENTER POSITION", "Nose Gear", "percent", "F0");
         AddFlag(v, "LJ35_ENG_SYNC_SW", "GENERIC_LEAR_SW_SYNC_1", "Engine Sync Switch", "Off", "On");
+        // For the top-of-descent estimate (Shift+D): the altitude the descent starts from, and
+        // the GNS VNAV target the Working Title unit publishes only while its VNAV is armed.
+        AddSimReadout(v, "LJ35_ALT_MSL", "INDICATED ALTITUDE", "Indicated Altitude", "feet", "F0");
+        AddSimReadout(v, "LJ35_GPS_TARGET_ALT", "GPS TARGET ALTITUDE", "GNS VNAV Target Altitude", "feet", "F0");
         foreach (var k in new[]
                  {
                      "LJ35_FUEL_WING_L_GAL", "LJ35_FUEL_WING_R_GAL", "LJ35_FUEL_PRESS_L", "LJ35_FUEL_PRESS_R",
                      "LJ35_INV_PRI_BUS", "LJ35_INV_SEC_BUS", "LJ35_INV_PRI_BREAKER", "LJ35_INV_SEC_BREAKER",
                      "LJ35_HYD_PSI_2", "LJ35_HYD_PSI_3", "LJ35_STALL_CIRCUIT_L", "LJ35_STALL_CIRCUIT_R",
                      "LJ35_ON_GROUND", "LJ35_MSW_PILOT", "LJ35_MSW_COPILOT", "LJ35_XFLOW_VALVE", "LJ35_GPWS_ACTIVE",
-                     "LJ35_AGL", "LJ35_VS", "LJ35_LOW_HEIGHT", "LJ35_RADALT_CIRCUIT", "LJ35_GEAR_CENTER", "LJ35_ENG_SYNC_SW"
+                     "LJ35_AGL", "LJ35_VS", "LJ35_LOW_HEIGHT", "LJ35_RADALT_CIRCUIT", "LJ35_GEAR_CENTER", "LJ35_ENG_SYNC_SW",
+                     "LJ35_ALT_MSL", "LJ35_GPS_TARGET_ALT"
                  })
             Cache(v, k);
 

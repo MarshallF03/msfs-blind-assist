@@ -39,7 +39,12 @@ OUTPUT MODE (press the output-mode key, then the letter)
   Shift+A    altitude alerter (the FC-530 preselect)
   Shift+H    heading bug
   Shift+S    speed target, in knots or Mach as selected
+  V          vertical speed, what the aeroplane is doing
   Shift+V    vertical speed target
+  D          distance and time to the destination, from the GNS flight plan
+  Shift+D    estimated top of descent: a three-degree path to the GNS VNAV target, or to
+             1500 feet when no target is set (the readout says which)
+  Ctrl+W     the waypoint the GNS is flying to: ident, distance, bearing and time
   B          both altimeter settings, in hectopascals and inches
   F          flaps, with asymmetry if the two sides differ
   G          gear: three green, up, or in transit with the percentages
