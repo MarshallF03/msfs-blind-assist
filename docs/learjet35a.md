@@ -82,11 +82,27 @@ comes on line. The long form lives in this document.
 ## Windows
 
 - **GNS 530** (Alt+N or Alt+M) and **GNS 430** (Alt+P): `Forms/Learjet35/Lj35GnsDisplayForm`,
-  reading the view with the generic row-clustering agent (`coherent-display-agent.js`) and
-  sending the bezel over the same socket. The GNS starts on the Working Title self-test page;
-  two Ctrl+Enter reach NAV. The scrape includes some map-scale numbers and the vendor's own
-  overlay prompts in the same view ("Set Full Fuel?", "Go To Checklists?"); a GNS-specific
-  agent that hides those is a follow-up.
+  reading the view with the GNS agent (`Resources/coherent-gns-agent.js`) and sending the
+  bezel over the same socket. The agent renders ONE layer — startup, self-test, a dialog,
+  or the active page — by DOM structure, then the radios and the status footer as fixed
+  lines; the first row is always the context ("NAV page 1 of 5, Navigation", "Direct To,
+  select waypoint", "Self-test. Turn the large knob to OK? and press Enter"). The generic
+  row-clustering agent it replaced read the self-test page and the NAV page drawn beneath
+  it as one soup, stitched the radio pane into every row, and showed Garmin's private
+  unit glyphs as "�" (they are Latin-1 letters the instrument font draws as ligatures —
+  `GNSNumberUnitDisplay.getUnitChar` in WT530B.js is the table). After a key the window
+  speaks what the key DID (`Lj35GnsSpeech` over the agent's `state()` string): the page
+  or dialog now on top, the row the cursor landed on, the character an ident entry shows
+  under the cursor, or the standby frequency after a radio knob.
+
+  **Two facts about the unit, both measured live 2026-09-08, that the window's help text
+  now carries.** On the self-test page ONLY the large right knob (moves the highlight to
+  "OK?") and ENT do anything — FPL, PROC, the page groups and the small knob are all
+  swallowed by the self-test's own control, and the default highlight sits on "Go To
+  Checklists?", where ENT is a no-op. An earlier note here said "two Ctrl+Enter reach
+  NAV"; it was wrong, and it is why the bezel looked dead. And FPL, VNAV and PROC are
+  DETACHED page groups in Working Title's implementation: inside them the large knob turns
+  no page, and CLR (or the same button again) is the way back.
 - **The tablet** is exposed as panels (Tablet, Cabin, Ground Equipment, Payload, Aircraft
   Options) because every tablet control is a plain L:var; a scraped tablet window is a
   follow-up.

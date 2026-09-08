@@ -21,7 +21,16 @@ DISPLAY WINDOWS (direct Alt keys, no output mode)
     Alt+Shift+Enter          COM swap                 Ctrl+Alt+Shift+Enter    NAV swap
     F5 refreshes, Escape closes.
 
-  The GNS starts on the Working Title self-test page: two Ctrl+Enter presses reach the NAV page.
+  The first line of the list always says which page or dialog is up, and every key answers
+  with what it did: the page it turned to, the row the cursor landed on, the character an
+  ident entry now shows under the cursor, or the new standby frequency.
+
+  The GNS starts on the Working Title self-test page, and on that page only the large knob and
+  ENT do anything: press Ctrl+Right until the cursor is on "OK?", then Ctrl+Enter. Flight plan,
+  procedures and VNAV are their own page groups; inside them the large knob turns no page, and
+  Ctrl+L (or the same button again) is the way back. Waypoint idents are entered a character at
+  a time: the small knob changes the character under the cursor, the large knob moves to the
+  next character.
 
 OUTPUT MODE (press the output-mode key, then the letter)
   P          N1 and N2, both engines
