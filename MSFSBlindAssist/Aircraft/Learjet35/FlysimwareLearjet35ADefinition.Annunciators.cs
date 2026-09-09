@@ -53,6 +53,9 @@ public partial class FlysimwareLearjet35ADefinition
         // the GNS VNAV target the Working Title unit publishes only while its VNAV is armed.
         AddSimReadout(v, "LJ35_ALT_MSL", "INDICATED ALTITUDE", "Indicated Altitude", "feet", "F0");
         AddSimReadout(v, "LJ35_GPS_TARGET_ALT", "GPS TARGET ALTITUDE", "GNS VNAV Target Altitude", "feet", "F0");
+        // The characteristic-speed keys (Shift+1..6) read the gross weight through the Tablet
+        // panel's LJ35_TOTAL_WEIGHT — ⚠️ never a second key on "TOTAL WEIGHT": the continuous
+        // batch sorts by SimVar NAME and a duplicate shifts every later variable's slot.
         foreach (var k in new[]
                  {
                      "LJ35_FUEL_WING_L_GAL", "LJ35_FUEL_WING_R_GAL", "LJ35_FUEL_PRESS_L", "LJ35_FUEL_PRESS_R",

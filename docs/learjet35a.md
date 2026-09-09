@@ -122,6 +122,18 @@ comes on line. The long form lives in this document.
   One Ctrl+M row ("Waypoint Passing Call") mutes it; the row rides `GPS IS ACTIVE FLIGHT
   PLAN`, a SimVar name no other Learjet key carries (the batch sorts by name). On a SID or
   STAR the unit leaves the idents blank, so only enroute fixes are named today.
+- **Characteristic speeds (Shift+1..6, `Lj35Speeds`).** Two kinds of number, and each
+  readout says which. COMPUTED AT WEIGHT: the flight model's AFM stall speeds at 18,300 lb
+  (clean 129, full flap 105 — `[REFERENCE SPEEDS]`, marked "AFM DATA" by the vendor) scaled
+  by the square root of the live gross weight (the Tablet panel's `TOTAL WEIGHT` key — ONE
+  registration; a second key on the same SimVar name would shift every later batch slot),
+  Vref as 1.3 × Vs0 — 124 kt at 15,000 lb and 111 kt at 12,000 lb, within a knot of the
+  real 35A Vref chart. Flaps 8 and 20
+  stall speeds are ESTIMATED factors (0.94 × clean, 1.06 × full) and takeoff speeds the FAR 25
+  minima (1.10 / 1.20 × Vs flaps 8); those readouts say so. PUBLISHED LIMITATIONS, not
+  derivable from anything on this machine: Vmo 300, Mmo 0.81, Vfe 200/200/150, Vlo 200,
+  Vle 260 — the owner accepted them as the 35A's on 2026-09-09; correct them in `Lj35Speeds`
+  if the AFM says otherwise.
 - **The flight plan page's knobs are not the list's knobs** (read out of `FPLPage` /
   `FPLEntry` and confirmed live, at the cost of a "REMOVE WAYPOINT, Yes?" prompt that had to
   be backed out of): the knob push puts the cursor on the legs, the LARGE knob moves through

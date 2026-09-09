@@ -55,6 +55,16 @@ public partial class FlysimwareLearjet35ADefinition
             // it is deliberately not handled here); Shift+V is the FC-530's target.
             case HotkeyAction.ReadFCUVerticalSpeedFPA: RequestFCUVerticalSpeed(sc, ann); return true;
 
+            // ---- characteristic speeds (Shift+1..6): the Airbus set has no meaning here, so
+            // the keys carry the 35A's — see Lj35Speeds for which are computed at weight and
+            // which are published limitations.
+            case HotkeyAction.ReadSpeedGD: ann.AnnounceImmediate(Lj35Speeds.ComposeTakeoff(ReadNow(sc, "LJ35_TOTAL_WEIGHT"))); return true;
+            case HotkeyAction.ReadSpeedS: ann.AnnounceImmediate(Lj35Speeds.ComposeBarberPole()); return true;
+            case HotkeyAction.ReadSpeedF: ann.AnnounceImmediate(Lj35Speeds.ComposeFlapLimits()); return true;
+            case HotkeyAction.ReadSpeedVLS: ann.AnnounceImmediate(Lj35Speeds.ComposeVref(ReadNow(sc, "LJ35_TOTAL_WEIGHT"))); return true;
+            case HotkeyAction.ReadSpeedVS: ann.AnnounceImmediate(Lj35Speeds.ComposeStall(ReadNow(sc, "LJ35_TOTAL_WEIGHT"))); return true;
+            case HotkeyAction.ReadSpeedVFE: ann.AnnounceImmediate(Lj35Speeds.ComposeGearLimits()); return true;
+
             // ---- the GNS's flight plan, off the stock GPS SimVars the Working Title unit
             // writes (D, Shift+D, Ctrl+W). Read from the standing one-second frame, never
             // re-requested: see SimConnectManager.LastGpsWaypoint.

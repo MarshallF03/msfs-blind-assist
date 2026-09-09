@@ -54,6 +54,15 @@ OUTPUT MODE (press the output-mode key, then the letter)
   Shift+D    estimated top of descent: a three-degree path to the GNS VNAV target, or to
              1500 feet when no target is set (the readout says which)
   Ctrl+W     the waypoint the GNS is flying to: ident, distance, bearing and time
+
+  Speeds (the Airbus green-dot keys carry the 35A's speeds instead):
+  Shift+1    takeoff at current weight, flaps 8: rotate and V2 (estimated from the stall speeds)
+  Shift+2    Vmo 300 knots and Mmo 0.81
+  Shift+3    flap limits: 200 knots for 8 and 20 degrees, 150 for 40
+  Shift+4    Vref flaps 40 at current weight, with a flaps-20 figure (computed from the stall
+             speed at weight; matches the 35A chart within a knot or two)
+  Shift+5    stall speeds at current weight, clean and flaps 40, and the AFM figures at max gross
+  Shift+6    gear: operate below 200 knots, extended limit 260
   B          both altimeter settings, in hectopascals and inches
   F          flaps, with asymmetry if the two sides differ
   G          gear: three green, up, or in transit with the percentages
