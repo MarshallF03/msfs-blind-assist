@@ -63,6 +63,12 @@ unique** — all pinned by `Lj35PanelStructureTests`.
 a failure); MSFSBA's own combo sets are covered by the global `_uiSetEcho` wrap. So: **every
 settable switch is Continuous + announced**, **every numeric readout is silent** and read from the
 panel scan or a hotkey, and the derived annunciator lamps announce on lighting and clearing.
+The one exception is the RADIO FREQUENCIES (COM 1/2, NAV 1/2, both ADFs — the `Freq` helper):
+announced on change, because vPilot retunes COM 1 when a controller is picked and a pilot
+who cannot see the radio must hear that. COM 1 and NAV 1 were cached-silent until
+2026-09-09, when a pilot reported hearing COM 2 change under vPilot but never COM 1. The
+GNS window's radio knob therefore speaks only the key it pressed, so a settled frequency
+is heard once.
 
 The annunciator panel is DERIVED: `Lj35AnnunciatorLogic` transcribes each lamp's condition from
 `Annunciators.xml` as a function of cached variables, and the definition evaluates the lamps
