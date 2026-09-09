@@ -79,9 +79,9 @@ public class Lj35GnsSpeechTests
     }
 
     [Fact]
-    public void RadioKnobSaysTheStandbyFrequency()
+    public void RadioKnobSaysTheKeyAndLeavesTheFrequencyToTheMonitor()
     {
-        Assert.Equal("COM standby 124.850", Lj35GnsSpeech.Compose(Lj35GnsKeyKind.Radio, Lj35GnsSpeech.Parse(Nav), "megahertz up"));
+        Assert.Equal("megahertz up", Lj35GnsSpeech.Compose(Lj35GnsKeyKind.Radio, Lj35GnsSpeech.Parse(Nav), "megahertz up"));
         Assert.Equal("megahertz up", Lj35GnsSpeech.Compose(Lj35GnsKeyKind.Radio, Lj35GnsSpeech.Parse("ok|page|NAV page 1 of 5|||"), "megahertz up"));
     }
 }

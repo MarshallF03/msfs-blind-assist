@@ -32,16 +32,20 @@ public partial class FlysimwareLearjet35ADefinition
         AddSimReadout(v, "LJ35_GPS_GS", "GPS GROUND SPEED", "GPS Ground Speed", "knots", "F0");
         AddFlag(v, "LJ35_GPS_APPR", "GPS IS APPROACH ACTIVE", "GPS Approach", "Not active", "Active", simvar: true);
         AddFlag(v, "LJ35_GPS_OBS", "GPS OBS ACTIVE", "GPS OBS", "Off", "On", simvar: true);
-        AddSimReadout(v, "LJ35_COM1_ACT", "COM ACTIVE FREQUENCY:1", "COM 1 Active", "MHz", "F3");
-        AddSimReadout(v, "LJ35_COM1_STBY", "COM STANDBY FREQUENCY:1", "COM 1 Standby", "MHz", "F3");
-        AddSimReadout(v, "LJ35_NAV1_ACT", "NAV ACTIVE FREQUENCY:1", "NAV 1 Active", "MHz", "F2");
-        AddSimReadout(v, "LJ35_NAV1_STBY", "NAV STANDBY FREQUENCY:1", "NAV 1 Standby", "MHz", "F2");
+        // Announced on change like COM 2 / NAV 2 on the pedestal (the same Freq helper), not
+        // cached-silent as before: vPilot retunes COM 1 when a controller is selected, and a
+        // pilot heard COM 2 change but never COM 1 (live 2026-09-09). The pilot's own sets are
+        // covered by MainForm's global echo wrap; the GNS window's radio knob speaks only the
+        // key so the settled value is heard once, from here.
+        v["LJ35_COM1_ACT"] = Freq("COM ACTIVE FREQUENCY:1", "COM 1 Active", "MHz", "F3");
+        v["LJ35_COM1_STBY"] = Freq("COM STANDBY FREQUENCY:1", "COM 1 Standby", "MHz", "F3");
+        v["LJ35_NAV1_ACT"] = Freq("NAV ACTIVE FREQUENCY:1", "NAV 1 Active", "MHz", "F2");
+        v["LJ35_NAV1_STBY"] = Freq("NAV STANDBY FREQUENCY:1", "NAV 1 Standby", "MHz", "F2");
         AddTyped(v, "LJ35_COM1_STBY_SET", "COM 1 Standby", "MHz", "Type 118.000 to 136.990.", "LJ35_COM1_STBY");
         AddTyped(v, "LJ35_NAV1_STBY_SET", "NAV 1 Standby", "MHz", "Type 108.00 to 117.95.", "LJ35_NAV1_STBY");
         AddButton(v, "LJ35_COM1_SWAP", "COM_STBY_RADIO_SWAP", "COM 1 Swap");
         AddButton(v, "LJ35_NAV1_SWAP", "NAV1_RADIO_SWAP", "NAV 1 Swap");
         Cache(v, "LJ35_GPS_WP_DIST"); Cache(v, "LJ35_GPS_WP_BRG"); Cache(v, "LJ35_GPS_ETE"); Cache(v, "LJ35_GPS_XTK");
-        Cache(v, "LJ35_COM1_ACT"); Cache(v, "LJ35_COM1_STBY"); Cache(v, "LJ35_NAV1_ACT"); Cache(v, "LJ35_NAV1_STBY");
 
         // Transponder
         AddSimState(v, "LJ35_XPDR_MODE", "TRANSPONDER STATE:1", "Transponder Mode",

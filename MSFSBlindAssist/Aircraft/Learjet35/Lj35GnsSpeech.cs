@@ -67,7 +67,9 @@ public static class Lj35GnsSpeech
         switch (kind)
         {
             case Lj35GnsKeyKind.Radio:
-                return state.Tuning.Length > 0 ? state.Tuning : fallback;
+                // The key only: COM 1 / NAV 1 are announced rows, so the settled frequency is
+                // spoken once by the change monitor rather than here AND there.
+                return fallback;
             case Lj35GnsKeyKind.Knob:
                 if (state.EntryChar.Length > 0) return state.EntryChar;
                 if (state.Cursor.Length > 0) return state.Cursor;
