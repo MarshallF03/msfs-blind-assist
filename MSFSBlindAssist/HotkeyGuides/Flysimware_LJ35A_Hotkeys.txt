@@ -32,7 +32,14 @@ DISPLAY WINDOWS (direct Alt keys, no output mode)
   procedures and VNAV are their own page groups; inside them the large knob turns no page, and
   Ctrl+L (or the same button again) is the way back. Waypoint idents are entered a character at
   a time: the small knob changes the character under the cursor, the large knob moves to the
-  next character.
+  next character — or Ctrl+T types the whole ident.
+
+  On the FLIGHT PLAN page (Ctrl+F) the knobs mean something different, and it matters: Shift+Enter
+  puts the cursor on the legs, the LARGE knob (Ctrl+Left / Ctrl+Right) moves through them, the
+  small knob on a leg opens a waypoint entry to INSERT before it, and Ctrl+L on a leg asks to
+  DELETE it (answer with Ctrl+L again to keep it). To go direct to a leg: cursor on, Ctrl+Right
+  to the leg, Ctrl+D, then Ctrl+Enter twice (ident, then Activate?). To go direct to any fix:
+  Ctrl+D, Ctrl+T, type the ident, Ctrl+Enter, Ctrl+Enter.
 
 OUTPUT MODE (press the output-mode key, then the letter)
   P          N1 and N2, both engines

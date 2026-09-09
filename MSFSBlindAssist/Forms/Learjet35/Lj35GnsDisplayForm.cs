@@ -102,6 +102,7 @@ public sealed class Lj35GnsDisplayForm : Form
                 "Control with D direct to, F flight plan, P procedures, E menu, L clear, G message, O OBS, C CDI, V VNAV. " +
                 "Flight plan, procedures and VNAV are their own groups: control L leaves them. " +
                 "Control with T types an ident into the field under the cursor, then control Enter confirms it. " +
+                "On the flight plan page the large knob moves through the legs, the small knob on a leg inserts a waypoint, and control L on a leg asks to delete it. " +
                 "Control with Page Up and Page Down is the map range. " +
                 "Alt with up and down is the radio megahertz, Alt with left and right the kilohertz, Alt with Enter toggles COM and NAV tuning, " +
                 "Alt with Shift and Enter swaps COM, Control Alt Shift Enter swaps NAV. F5 refreshes; Escape closes. Auto-updates."

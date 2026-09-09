@@ -122,6 +122,14 @@ comes on line. The long form lives in this document.
   One Ctrl+M row ("Waypoint Passing Call") mutes it; the row rides `GPS IS ACTIVE FLIGHT
   PLAN`, a SimVar name no other Learjet key carries (the batch sorts by name). On a SID or
   STAR the unit leaves the idents blank, so only enroute fixes are named today.
+- **The flight plan page's knobs are not the list's knobs** (read out of `FPLPage` /
+  `FPLEntry` and confirmed live, at the cost of a "REMOVE WAYPOINT, Yes?" prompt that had to
+  be backed out of): the knob push puts the cursor on the legs, the LARGE knob moves through
+  them, the SMALL knob on a leg opens the waypoint-entry dialog to INSERT before it
+  (`handleInnerKnobScroll` → `ViewService.getWaypoint()`), and CLR on a leg is the delete
+  prompt. The list is fully in the DOM (26 legs in a 6-row scroll container), so the window
+  reads every leg and the cursor line follows the highlighted one. The guide says so; an
+  earlier version told pilots the small knob scrolls, which on this page starts an insert.
 - **Typed ident entry, Ctrl+T in the GNS window.** The agent's `typeIdent` finds the
   `AlphaNumInput` component behind the visible ident field (a walk of the instrument's
   object graph from its main screen — FSComponent attaches no instance to the DOM) and
