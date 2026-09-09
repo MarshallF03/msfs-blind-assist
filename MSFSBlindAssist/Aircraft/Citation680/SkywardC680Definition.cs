@@ -63,16 +63,31 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         var controls = new Dictionary<string, List<string>>();
         foreach (var panels in GetPanelStructure().Values)
             foreach (var panel in panels) controls[panel] = new List<string>();
+        controls[ElectricalPanel] = new(ElectricalControls);
+        controls[ApuPanel] = new(ApuControls);
+        controls[StartPanel] = new(StartControls);
+        controls[AntiIcePanel] = new(AntiIceControls);
+        controls[ExteriorLightsPanel] = new(ExteriorLightsControls);
+        controls[InteriorLightingPanel] = new(InteriorLightingControls);
         return controls;
     }
 
     protected override Dictionary<string, SimVarDefinition> BuildVariables()
     {
         var vars = new Dictionary<string, SimVarDefinition>();
+        void Add(Dictionary<string, SimVarDefinition> more) { foreach (var kv in more) vars[kv.Key] = kv.Value; }
+        Add(BuildLeftTiltVariables());
         return vars;
     }
 
-    public override Dictionary<string, List<string>> GetPanelDisplayVariables() => new();
+    public override Dictionary<string, List<string>> GetPanelDisplayVariables() => new()
+    {
+        [ElectricalPanel] = new(ElectricalDisplay),
+        [ApuPanel] = new(ApuDisplay),
+        [StartPanel] = new(StartDisplay),
+        [AntiIcePanel] = new(AntiIceDisplay),
+        [ExteriorLightsPanel] = new(ExteriorLightsDisplay)
+    };
     public override Dictionary<string, string> GetButtonStateMapping() => new();
 
     // The G3000 autopilot takes values: preselect, bug, V/S and speed are all stock SET events.
@@ -98,7 +113,10 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
 
     public override bool HandleUIVariableSet(string varKey, double value, SimVarDefinition varDef,
         SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
-        => base.HandleUIVariableSet(varKey, value, varDef, simConnect, announcer);
+    {
+        if (HandleLeftTiltSet(varKey, value, simConnect)) return true;
+        return base.HandleUIVariableSet(varKey, value, varDef, simConnect, announcer);
+    }
 
     // ==================================================================================
     // Updates — returning true means handled; the generic announcer never runs for that key.
