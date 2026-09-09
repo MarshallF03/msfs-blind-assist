@@ -57,7 +57,11 @@ public partial class FlysimwareLearjet35ADefinition
             new Dictionary<double, string> { [0] = "Full", [1] = "Half" }, help: "Vendor: half bank is not available with the GNS 530 fit.");
         AddButton(v, "LJ35_AP_TST", "AUTOPILOT_LIGHT_TEST", "Autopilot Lamp Test");
         AddTyped(v, "LJ35_AP_PRESELECT_SET", "Altitude Alerter", "feet", "0 to 99900, whole hundreds.", "LJ35_AP_PRESELECT");
-        AddReadout(v, "LJ35_AP_PRESELECT", "ALERTER_DIGITAL", "Altitude Alerter Set", "feet", "F0");
+        // ⚠️ "number", not "feet": the vendor stores the alerter as a bare number that IS feet
+        // (2400 = 2,400 ft), and asking SimConnect for feet made it convert the raw value as
+        // metres — 2400 read back as 7,874, a 35,000 ft alerter as 114,829 (live 2026-09-09).
+        // The other unit-bearing L:var readouts were checked the same way and do not convert.
+        AddReadout(v, "LJ35_AP_PRESELECT", "ALERTER_DIGITAL", "Altitude Alerter Set", "number", "F0");
         AddTyped(v, "LJ35_AP_HDG_SET", "Heading Bug", "degrees", "0 to 359.", "LJ35_AP_HDG_BUG");
         AddSimReadout(v, "LJ35_AP_HDG_BUG", "AUTOPILOT HEADING LOCK DIR", "Heading Bug", "degrees", "F0");
         AddTyped(v, "LJ35_AP_VS_SET", "Vertical Speed Target", "feet per minute", "Minus 6000 to 6000.", "LJ35_AP_VS_VAR");

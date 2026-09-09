@@ -292,7 +292,10 @@ public partial class FlysimwareLearjet35ADefinition : BaseAircraftDefinition
                 return true;
             }
             case "LJ35_ZULU_H": case "LJ35_LOCAL_H": displayText = ClockText(value); return true;
-            case "LJ35_XPDR_CODE": displayText = ((int)Math.Round(value)).ToString("0000"); return true;
+            // BCO16 delivers the code BCD-packed — one octal digit per nibble, so 2000 arrives as
+            // 0x2000 = 8192 — and it was read out as "8192" (live 2026-09-09). The hex digits ARE
+            // the squawk, exactly as the A380's RMP treats it.
+            case "LJ35_XPDR_CODE": displayText = ((int)Math.Round(value)).ToString("X4"); return true;
         }
         return base.TryGetDisplayOverride(varKey, value, out displayText);
     }
