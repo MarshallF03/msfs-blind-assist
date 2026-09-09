@@ -1,0 +1,151 @@
+using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.Hotkeys;
+using MSFSBlindAssist.SimConnect;
+using System.Windows.Forms;
+
+namespace MSFSBlindAssist.Aircraft.Citation680;
+
+/// <summary>
+/// Skyward Simulations Cessna Citation Sovereign+ (C680, MSFS 2024). No WASM: every switch is a
+/// plain L:SW_SOV_* written through the calculator path, batteries/starters/run-stop are the stock
+/// B: inputs, the autopilot is the stock G3000 autopilot on K: events, the four touchscreens and
+/// the EFB are Coherent HTML driven by DOM clicks and the Working Title GTC H: events.
+///
+/// STUDY-LEVEL, NOT SIMPLIFIED. Every control a sighted pilot can reach from either seat is
+/// exposed, in the vendor checklist's own words; MSFSBA reports and never decides.
+/// Assessed live 2026-09-09; see docs/citation680.md and docs/citation680-variables.md.
+///
+/// ⚠️ Reads during development are verified through a Coherent view (tools/coherent-eval.ps1),
+/// never through the SimConnect MCP's MobiFlight list — GSX crowds the vendor's names out of it.
+/// </summary>
+public partial class SkywardC680Definition : BaseAircraftDefinition
+{
+    public override string AircraftName => "Skyward Citation Sovereign+";
+    public override string AircraftCode => "SKYWARD_C680";
+
+    // ==================================================================================
+    // Panel structure — the real Sovereign+ cockpit. Sections are cockpit areas, panels the
+    // switch groups a Sovereign pilot names. Panel names key a FLAT dictionary, so none repeats.
+    // ==================================================================================
+
+    public override Dictionary<string, List<string>> GetPanelStructure() => new()
+    {
+        ["Glareshield"] = new() { AutopilotPanel, WarningPanel, StandbyPanel },
+        ["Left Tilt Panel"] = new() { ElectricalPanel, ApuPanel, StartPanel, AntiIcePanel, ExteriorLightsPanel, InteriorLightingPanel },
+        ["Right Tilt Panel"] = new() { PressPanel, EnvironmentPanel, HydraulicsPanel, FuelPanel, OxygenPanel },
+        ["Pedestal"] = new() { ThrustPanel, FlapsPanel, GearPanel, FlightControlsPanel, YokePanel, SignsPanel },
+        ["Avionics"] = new() { PilotGtcPanel, MfdGtcPanel, DisplaysPanel },
+        ["Side Consoles"] = new() { BreakersPanel },
+        ["Cabin and Ground"] = new() { DoorsPanel, GroundPanel, PayloadPanel, WaterPanel },
+        ["Simulation"] = new() { SeatPanel, EfbOptionsPanel }
+    };
+
+    private const string AutopilotPanel = "Autopilot and Flight Director", WarningPanel = "Warning and Fire", StandbyPanel = "Standby Instrument",
+        ElectricalPanel = "Electrical", ApuPanel = "APU", StartPanel = "Engine Start", AntiIcePanel = "Anti-Ice",
+        ExteriorLightsPanel = "Exterior Lights", InteriorLightingPanel = "Interior Lighting",
+        PressPanel = "Pressurization and Bleed", EnvironmentPanel = "Cabin Environment", HydraulicsPanel = "Hydraulics",
+        FuelPanel = "Fuel", OxygenPanel = "Oxygen and Emergency",
+        ThrustPanel = "Thrust and Autothrottle", FlapsPanel = "Flaps Speedbrakes and Trim", GearPanel = "Gear and Brakes",
+        FlightControlsPanel = "Flight Controls", YokePanel = "Yoke", SignsPanel = "Passenger Signs and Cabin",
+        PilotGtcPanel = "Pilot Touchscreen", MfdGtcPanel = "MFD Touchscreen", DisplaysPanel = "Displays",
+        BreakersPanel = "Circuit Breakers",
+        DoorsPanel = "Doors and Service Panels", GroundPanel = "Ground Equipment", PayloadPanel = "Payload and Fuel Load", WaterPanel = "Water and Waste",
+        SeatPanel = "Crew Seat", EfbOptionsPanel = "EFB Options";
+
+    // ==================================================================================
+    // Panel controls. EVERY panel gets an entry even while empty — MainForm's panel build
+    // returns early for a panel absent from GetPanelControls() and the panel then renders
+    // completely blank (the HS787 Flight Data trap).
+    // ==================================================================================
+
+    protected override Dictionary<string, List<string>> BuildPanelControls()
+    {
+        var controls = new Dictionary<string, List<string>>();
+        foreach (var panels in GetPanelStructure().Values)
+            foreach (var panel in panels) controls[panel] = new List<string>();
+        return controls;
+    }
+
+    protected override Dictionary<string, SimVarDefinition> BuildVariables()
+    {
+        var vars = new Dictionary<string, SimVarDefinition>();
+        return vars;
+    }
+
+    public override Dictionary<string, List<string>> GetPanelDisplayVariables() => new();
+    public override Dictionary<string, string> GetButtonStateMapping() => new();
+
+    // The G3000 autopilot takes values: preselect, bug, V/S and speed are all stock SET events.
+    public override FCUControlType GetAltitudeControlType() => FCUControlType.SetValue;
+    public override FCUControlType GetHeadingControlType() => FCUControlType.SetValue;
+    public override FCUControlType GetSpeedControlType() => FCUControlType.SetValue;
+    public override FCUControlType GetVerticalSpeedControlType() => FCUControlType.SetValue;
+
+    /// <summary>Super-mid bizjet: Vref 110 from the vendor's landing V-speed group, Vapp 117.</summary>
+    public override VisualGuidanceProfile GetVisualGuidanceProfile() => new()
+    {
+        TypicalApproachAoaDeg = 4.0, ReferenceVrefKnots = 110.0, MaxPitchRateDegPerSec = 2.5, MaxBankRateDegPerSec = 4.0,
+        GlideslopeAltitudeBiasFt = 40.0, FlareAltitudeBiasFt = 20.0, FlareTriggerWheelHeightFt = 30.0,
+        FlareTargetPitchDeg = 4.0, TonePitchRangeDeg = 10.0
+    };
+
+    /// <summary>Pilot / Copilot, from the saved setting.</summary>
+    public C680Seat.Side CurrentSeat => C680Seat.FromSetting(Settings.SettingsManager.Current.C680CrewSeat);
+
+    // ==================================================================================
+    // Writes — each panel owns its keys; the router tries them in turn.
+    // ==================================================================================
+
+    public override bool HandleUIVariableSet(string varKey, double value, SimVarDefinition varDef,
+        SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
+        => base.HandleUIVariableSet(varKey, value, varDef, simConnect, announcer);
+
+    // ==================================================================================
+    // Updates — returning true means handled; the generic announcer never runs for that key.
+    // ==================================================================================
+
+    public override bool ProcessSimVarUpdate(string varName, double value, ScreenReaderAnnouncer announcer)
+    {
+        _live[varName] = value;
+        if (IsSilentCachedReadout(varName)) return true;
+        return base.ProcessSimVarUpdate(varName, value, announcer);
+    }
+
+    // ==================================================================================
+    // Hotkeys — the readouts and display windows live in .Hotkeys.cs.
+    // ==================================================================================
+
+    public override bool HandleHotkeyAction(HotkeyAction action, SimConnectManager simConnect,
+        ScreenReaderAnnouncer announcer, Form parentForm, HotkeyManager hotkeyManager)
+    {
+        if (action == HotkeyAction.MonitorManager)
+        {
+            (parentForm as MainForm)?.ShowC680MonitorManagerDialog();
+            return true;
+        }
+        return base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager);
+    }
+
+    private readonly Dictionary<string, Form> _windows = new(StringComparer.Ordinal);
+
+    /// <summary>Reuse an open window by id, else create, track and show it.</summary>
+    private void ShowWindow(string id, Func<Form> factory)
+    {
+        if (_windows.TryGetValue(id, out var existing) && !existing.IsDisposed) { existing.Show(); existing.Activate(); return; }
+        var w = factory();
+        _windows[id] = w;
+        w.FormClosed += (_, _) => _windows.Remove(id);
+        w.Show();
+    }
+
+    /// <summary>Releases every window this definition opened; MainForm calls it on an aircraft switch.</summary>
+    public void DisposeWindows()
+    {
+        foreach (var w in _windows.Values)
+        {
+            try { if (!w.IsDisposed) w.Close(); } catch { }
+            try { w.Dispose(); } catch { }
+        }
+        _windows.Clear();
+    }
+}

@@ -177,6 +177,9 @@ public partial class MainForm
         // was a dead checkbox on the 777. Same wrap, same reason; same PMDG_ prefix test as below.
         bool pmdgMuted = currentAircraft.AircraftCode.StartsWith("PMDG_", StringComparison.Ordinal) &&
             Settings.SettingsManager.Current.PMDGDisabledMonitorVariablesSet.Contains(e.VarName);
+        // The Sovereign+ speaks its master lamps and CAS classes from its own paths — same wrap, same reason.
+        bool c680Muted = currentAircraft.AircraftCode == "SKYWARD_C680" &&
+            Settings.SettingsManager.Current.C680DisabledMonitorVariablesSet.Contains(e.VarName);
         // UI-set echo suppression — applies to EVERY aircraft, not just the HS787 (was the bug).
         // A def that auto-announces from INSIDE ProcessSimVarUpdate (the PMDG APU selector + the
         // Boris Audio Works soundpack switches, the HS787, the A380, ...) returns true and exits
@@ -190,7 +193,7 @@ public partial class MainForm
         // guards the non-def-handled announce path and its own baseline accuracy.
         bool uiEcho = _uiSetEcho.TryGetValue(e.VarName, out var ue)
             && Environment.TickCount64 - ue.tick < UiSetEchoSuppressMs;
-        bool suppressDefAnnounce = hs787Muted || a32nxMuted || iflyMuted || pmdgMuted || uiEcho;
+        bool suppressDefAnnounce = hs787Muted || a32nxMuted || iflyMuted || pmdgMuted || c680Muted || uiEcho;
         bool prevSuppressed = announcer.Suppressed;
         if (suppressDefAnnounce) announcer.Suppressed = true;
         bool wasProcessedByAircraft;
@@ -319,6 +322,13 @@ public partial class MainForm
                 // same A32NXDisabledMonitorVariables setting.
                 if ((currentAircraft.AircraftCode == "A320" || currentAircraft.AircraftCode == "HW_A330") &&
                     Settings.SettingsManager.Current.A32NXDisabledMonitorVariablesSet.Contains(e.VarName))
+                {
+                    return; // Skip announcement for disabled variable
+                }
+
+                // Check if disabled in the Sovereign+ Monitor Manager (switches and selectors on the generic path).
+                if (currentAircraft.AircraftCode == "SKYWARD_C680" &&
+                    Settings.SettingsManager.Current.C680DisabledMonitorVariablesSet.Contains(e.VarName))
                 {
                     return; // Skip announcement for disabled variable
                 }

@@ -139,7 +139,8 @@ public partial class HotkeyListForm : Form
             { "PMDG_777", "PMDG_777_Hotkeys.txt" },
             { "PMDG_737", "PMDG_737_Hotkeys.txt" },
             { "HS_787", "HS787_Hotkeys.txt" },
-            { "IFLY_737MAX8", "iFly_737MAX8_Hotkeys.txt" }
+            { "IFLY_737MAX8", "iFly_737MAX8_Hotkeys.txt" },
+            { "SKYWARD_C680", "Skyward_C680_Hotkeys.txt" }
         };
 
         // Determine which file to load

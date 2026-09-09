@@ -58,6 +58,8 @@ public partial class MainForm : Form
 
     private Forms.HS787.HS787MonitorManagerForm? hs787MonitorManagerForm;
 
+    private Forms.Citation680.C680MonitorManagerForm? c680MonitorManagerForm;
+
     private PMDGAnnouncementMonitorForm? pmdgAnnouncementMonitorForm;
 
     private MSFSBlindAssist.Services.PMDGProgPageMonitor? pmdgProgPageMonitor;
