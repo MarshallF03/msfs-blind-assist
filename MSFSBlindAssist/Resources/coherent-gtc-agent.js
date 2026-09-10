@@ -28,6 +28,14 @@
     while (p && p !== document) { if (hasClass(p, "touch-button") || hasClass(p, "bg-img-touch-button")) return true; p = p.parentNode; }
     return false;
   }
+  function inChrome(e) {
+    var p = e.parentNode;
+    while (p && p !== document) {
+      if (hasClass(p, "gtc-view-title") || hasClass(p, "label-bar") || hasClass(p, "gtc-nav-com-top-bar") || hasClass(p, "button-bar")) return true;
+      p = p.parentNode;
+    }
+    return false;
+  }
   function gtcIndex() { var m = /WTG3000_GTC_(\d)/.exec(document.title || ""); return m ? m[1] : "1"; }
   function main() { return document.querySelector(".gtc-main-content") || document.body; }
 
@@ -53,14 +61,30 @@
     return any ? parts.join(" ").replace(/\s+/g, " ").trim() : txt(e);
   }
 
+  // Every page carries two persistent bars — the radio bar on top (.gtc-nav-com-top-bar: Audio &
+  // Radios, COM1/2 and their standbys, MIC, MON) and the button bar at the bottom (.button-bar:
+  // XPDR, squawk, Back, Home, MSG, Full/Half). They are listed AFTER the page's own buttons, each
+  // under its own marker row, so the page content comes first (measured 2026-09-10).
+  function barOf(e) {
+    var p = e.parentNode;
+    while (p && p !== document) {
+      if (hasClass(p, "gtc-nav-com-top-bar")) return "top";
+      if (hasClass(p, "button-bar")) return "bottom";
+      p = p.parentNode;
+    }
+    return "";
+  }
   A.buttons = function () {
-    var out = []; var bs = document.querySelectorAll(".touch-button, .bg-img-touch-button");
+    var main = [], top = [], bottom = []; var bs = document.querySelectorAll(".touch-button, .bg-img-touch-button");
     for (var i = 0; i < bs.length; i++) {
       var e = bs[i]; if (isHidden(e)) continue;
       if (e.querySelector(".touch-button, .bg-img-touch-button")) continue;   // keep the innermost button
       var t = labelOf(e); if (!t) continue;
-      out.push({ i: out.length, el: e, label: t, enabled: !isDisabled(e) });
+      var b = { el: e, label: t, enabled: !isDisabled(e), bar: barOf(e) };
+      (b.bar === "top" ? top : b.bar === "bottom" ? bottom : main).push(b);
     }
+    var out = main.concat(top, bottom);
+    for (var k = 0; k < out.length; k++) out[k].i = k;
     A._buttons = out; return out;
   };
 
@@ -71,6 +95,7 @@
       var t = txt(e); if (!t) continue;
       var r = e.getBoundingClientRect(); if (r.width === 0 || r.height === 0) continue;
       if (insideButton(e)) continue;   // buttons are listed separately
+      if (inChrome(e)) continue;       // the title slots, the knob label bar and the two button bars are rendered elsewhere
       items.push({ t: t, x: Math.round(r.left), y: Math.round(r.top + r.height / 2) });
     }
     items.sort(function (a, b) { return (Math.round(a.y / 14) - Math.round(b.y / 14)) || (a.x - b.x); });
@@ -93,7 +118,11 @@
     try {
       var rows = ["Page: " + A.title()];
       var text = A.rows(); for (var i = 0; i < text.length; i++) rows.push(text[i]);
-      var bs = A.buttons(); for (var k = 0; k < bs.length; k++) rows.push("[" + bs[k].label + "]" + (bs[k].enabled ? "" : " (disabled)"));
+      var bs = A.buttons(); var lastBar = "";
+      for (var k = 0; k < bs.length; k++) {
+        if (bs[k].bar !== lastBar) { rows.push(bs[k].bar === "top" ? "Radio bar:" : "Bottom bar:"); lastBar = bs[k].bar; }
+        rows.push("[" + bs[k].label + "]" + (bs[k].enabled ? "" : " (disabled)"));
+      }
       rows.push("Knobs: " + A.knobLabel());
       return JSON.stringify({ ok: true, rows: rows });
     } catch (e) { return JSON.stringify({ ok: false, error: String(e), rows: [] }); }
