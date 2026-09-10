@@ -74,6 +74,9 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         controls[HydraulicsPanel] = new(HydraulicsControls);
         controls[FuelPanel] = new(FuelControls);
         controls[OxygenPanel] = new(OxygenControls);
+        controls[AutopilotPanel] = new(AutopilotControls);
+        controls[WarningPanel] = new(WarningControls);
+        controls[StandbyPanel] = new(StandbyControls);
         return controls;
     }
 
@@ -83,6 +86,7 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         void Add(Dictionary<string, SimVarDefinition> more) { foreach (var kv in more) vars[kv.Key] = kv.Value; }
         Add(BuildLeftTiltVariables());
         Add(BuildRightTiltVariables());
+        Add(BuildGlareshieldVariables());
         return vars;
     }
 
@@ -97,7 +101,10 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         [EnvironmentPanel] = new(EnvironmentDisplay),
         [HydraulicsPanel] = new(HydraulicsDisplay),
         [FuelPanel] = new(FuelDisplay),
-        [OxygenPanel] = new(OxygenDisplay)
+        [OxygenPanel] = new(OxygenDisplay),
+        [AutopilotPanel] = new(AutopilotDisplay),
+        [WarningPanel] = new(WarningDisplay),
+        [StandbyPanel] = new(StandbyDisplay)
     };
     public override Dictionary<string, string> GetButtonStateMapping() => new();
 
@@ -127,8 +134,38 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
     {
         if (HandleLeftTiltSet(varKey, value, simConnect)) return true;
         if (HandleRightTiltSet(varKey, value, simConnect)) return true;
+        if (HandleGlareshieldSet(varKey, value, simConnect)) return true;
         return base.HandleUIVariableSet(varKey, value, varDef, simConnect, announcer);
     }
+
+    // ==================================================================================
+    // Readouts — the FCU-style dialogs speak the cached targets; derived rows render here.
+    // ==================================================================================
+
+    public override void RequestFCUAltitude(SimConnectManager sc, ScreenReaderAnnouncer a)
+        => a.AnnounceImmediate(Compose("Altitude preselect", ReadNow(sc, "C680_AP_ALT_SEL"), "feet"));
+    public override void RequestFCUHeading(SimConnectManager sc, ScreenReaderAnnouncer a)
+        => a.AnnounceImmediate(Compose("Heading bug", ReadNow(sc, "C680_AP_HDG_BUG"), "degrees"));
+    public override void RequestFCUSpeed(SimConnectManager sc, ScreenReaderAnnouncer a)
+        => a.AnnounceImmediate((ReadNow(sc, "C680_AP_SPD_IS_MACH") ?? 0) > 0.5
+            ? $"Mach target {N(ReadNow(sc, "C680_AP_MACH_TGT"), "0.00")}"
+            : Compose("Speed target", ReadNow(sc, "C680_AP_SPD_TGT"), "knots"));
+    public override void RequestFCUVerticalSpeed(SimConnectManager sc, ScreenReaderAnnouncer a)
+        => a.AnnounceImmediate(Compose("Vertical speed target", ReadNow(sc, "C680_AP_VS_TGT"), "feet per minute"));
+    private static string Compose(string what, double? value, string units) => value == null ? $"{what} not yet read" : $"{what} {value:0} {units}";
+
+    public override bool TryGetDisplayOverride(string varKey, double value, out string displayText)
+    {
+        switch (varKey)
+        {
+            case "C680_SAI_LIMITS": displayText = "Low 100 knots, Vne 305, Mmo 0.80, altitude max 47000"; return true;
+        }
+        return base.TryGetDisplayOverride(varKey, value, out displayText);
+    }
+
+    /// <summary>The Ctrl+P autopilot window; reused while open.</summary>
+    public void ShowAutopilotWindow(SimConnectManager sc, ScreenReaderAnnouncer a)
+        => ShowWindow("autopilot", () => new Forms.Citation680.C680AutopilotWindow(this, sc, a));
 
     // ==================================================================================
     // Updates — returning true means handled; the generic announcer never runs for that key.

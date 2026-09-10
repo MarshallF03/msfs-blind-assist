@@ -101,3 +101,20 @@ returned 1111, and a fresh `(L:SW_SOV_ELEC_BATT_1) 1 +` returned 0 with the batt
 Writes are unaffected. Reconnecting the client clears it. For bulk reads use the Coherent
 debugger (`tools/coherent-eval.ps1 -Title WTG3000_MFD -ExprFile …` with
 `SimVar.GetSimVarValue`), which has no such cap and gave every value above.
+
+### Glareshield (2026-09-10, engines running at the gate)
+
+| Control | Variable | Measured |
+|---|---|---|
+| FD L / R | `AUTOPILOT FLIGHT DIRECTOR ACTIVE:1/2` ← `1 (>K:TOGGLE_FLIGHT_DIRECTOR)` (side as the parameter) | 0 → 1 → 0 on side 1, side 2 untouched. |
+| YD | `AUTOPILOT YAW DAMPER` ← `(>K:YAW_DAMPER_TOGGLE)` | 0 → 1 → 0. |
+| Heading bug / altitude preselect | `AUTOPILOT HEADING LOCK DIR`, `AUTOPILOT ALTITUDE LOCK VAR` ← `HEADING_BUG_SET`, `AP_ALT_VAR_SET_ENGLISH` | 250 and 15000 read back. |
+| AP DISC (yoke) | `L:SW_SOV_AUTOPILOT_Push_Disconnect_1/2_Pressed` | The vendor plugin maps these as its `ap_disc` inputs AND intercepts `AUTOPILOT_OFF` / `AUTOPILOT_DISENGAGE_*` (passthrough off): pulse the L:var and fire `AUTOPILOT_OFF`. |
+| AT / AT DISC / TO/GA | `K:AUTO_THROTTLE_ARM` (arms, or deactivates when armed/on), `K:AUTO_THROTTLE_DISCONNECT`, `K:AUTO_THROTTLE_TO_GA` | all intercepted by the plugin's FMS speed manager; status published as `L:SW_SOV_Autothrottle_Status` 0 Off / 1 Disconnected / 2 Armed / 3 On (its `STATUS_SIMVAR_ENUM_MAP`). `L:SW_Sovereign_Autothrottle_Status` also exists in the names but is not the one written. |
+| VNAV | `(>H:AS1000_VNAV_TOGGLE)` | the only VNAV key in the G3000's loaded sources; no state var (`L:XMLVAR_VNAVButtonValue` does not exist here) — the armed mode reads on the PFD FMA. |
+| Bank limit | — | `1 (>K:AP_MAX_BANK_SET)` and `(>K:AP_MAX_BANK_INC)` both left `AUTOPILOT MAX BANK ID` 0 / 30°; the GMC's half-bank lamp is not published. Not exposed. |
+| IAS / Mach | `AUTOPILOT MANAGED SPEED IN MACH` | `AP_MANAGED_SPEED_IN_MACH_ON` (the event the sources name) left it 0 on the ground. Readout only; the touchscreen speed-bug page owns the units. |
+| CWS | `L:SW_SOV_AUTOPILOT_CVS` | the yoke buttons toggle it (`! (>L:…)` in the model), so it is a switch, not a pulse. |
+| MASTER WARNING / CAUTION | `MASTER WARNING ACTIVE`, `MASTER CAUTION ACTIVE` (+ `… ACKNOWLEDGED`) ← `K:MASTER_WARNING_ACKNOWLEDGE` / `K:MASTER_CAUTION_ACKNOWLEDGE` | the model's own push templates; the `XMLVAR_WARNING_n` names in the model are its O: animation vars, not L:vars. All 0 with no fault present. |
+| Fire covers | `L:SAFETY_Push_Extinguisher_1_Cover` | 0 → 1 → 0. |
+| Standby QNH unit | `L:SW_SOV_GH3900_QNH` | 0 → 1 → 0; `KOHLSMAN SETTING MB:3` 1013.25. `SW_SOV_GH3900_BL` 0.8 at load. |
