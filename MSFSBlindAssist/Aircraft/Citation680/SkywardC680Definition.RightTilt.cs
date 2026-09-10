@@ -18,8 +18,9 @@ public partial class SkywardC680Definition
         AddSelector(v, "C680_BLEED_L", "SW_SOV_L_BLEED_AIR", "Left BLEED AIR Knob", new[] { "Off", "Low", "Norm", "High" });
         AddSelector(v, "C680_BLEED_R", "SW_SOV_R_BLEED_AIR", "Right BLEED AIR Knob", new[] { "Off", "Low", "Norm", "High" });
         AddSwitch(v, "C680_PRESS_MODE", "SW_SOV_PRESS_MODE", "PRESS MODE Button", "Auto", "Manual");
-        AddSelector(v, "C680_CABIN_ALT_SW", "SW_SOV_CABIN_ALT_SWITCH_POS", "CABIN ALT Switch", new[] { "Up", "Center", "Down" },
+        AddSelector(v, "C680_CABIN_ALT_SW", "SW_SOV_CABIN_ALT_SWITCH_POS", "CABIN ALT Switch", new[] { "Center" },
             "Momentary: Up or Down while held, back to Center by itself.");
+        v["C680_CABIN_ALT_SW"].ValueDescriptions = new Dictionary<double, string> { [-1] = "Down", [0] = "Center", [1] = "Up" }; // the model stores -1/0/1
         AddKnob(v, "C680_PRESS_RATE", "SW_SOV_PRESSURIZATION_RATE", "Pressurization Rate Knob");
         AddReadout(v, "C680_CABIN_ALT", "SW_SOV_CABIN_ALT", "Cabin Altitude", "number", "F0");
         AddSimReadout(v, "C680_CABIN_RATE", "PRESSURIZATION CABIN ALTITUDE RATE", "Cabin Rate", "feet per minute", "F0");
@@ -60,7 +61,8 @@ public partial class SkywardC680Definition
         // ---- Fuel (checklist: BOOST PUMP, CROSSFEED)
         AddSwitch(v, "C680_BOOST_L", "SW_SOV_FUEL_PUMP_1_ON_SWITCH", "Left BOOST PUMP Button");
         AddSwitch(v, "C680_BOOST_R", "SW_SOV_FUEL_PUMP_2_ON_SWITCH", "Right BOOST PUMP Button");
-        AddSelector(v, "C680_CROSSFEED", "SW_SOV_FUEL_TRANSFER", "CROSSFEED Knob", new[] { "Left to Right", "Off", "Right to Left" });
+        AddSelector(v, "C680_CROSSFEED", "SW_SOV_FUEL_TRANSFER", "CROSSFEED Knob", new[] { "Left Tank", "Off", "Right Tank" },
+            "Feeds both engines from the named tank: its boost pump runs and the crossfeed valve opens.");
         AddSimReadout(v, "C680_FUEL_L_LB", "FUELSYSTEM TANK WEIGHT:1", "Left Tank", "pounds", "F0");
         AddSimReadout(v, "C680_FUEL_R_LB", "FUELSYSTEM TANK WEIGHT:2", "Right Tank", "pounds", "F0");
         AddSimReadout(v, "C680_FUEL_TOTAL_LB", "FUEL TOTAL QUANTITY WEIGHT", "Total Fuel", "pounds", "F0");
@@ -87,8 +89,8 @@ public partial class SkywardC680Definition
         AddButton(v, "C680_CVR_TEST", "CVR Test Button (hold)");
         AddButton(v, "C680_CVR_ERASE", "CVR Erase Button (hold)");
         AddFlag(v, "C680_CVR_IND", "CVR_indicator", "CVR Test Light", "Out", "Lit");
-        AddSimState(v, "C680_ELT", "L:XMLVAR_ELT_STATE", "ELT Switch",
-            new Dictionary<double, string> { [0] = "Off", [1] = "Arm", [2] = "On" });
+        AddSimSwitch(v, "C680_ELT", "ELT ACTIVATED", "ELT Switch", "Armed", "On",
+            "The stock emergency locator transmitter switch. On transmits; the model reports only whether it is transmitting.");
 
         foreach (var k in new[] { "C680_FUEL_L_LB", "C680_FUEL_R_LB", "C680_FUEL_TOTAL_LB", "C680_CABIN_ALT", "C680_CABIN_RATE", "C680_CABIN_DIFF", "C680_HYD_PSI", "C680_OXY_L_PSI" })
             Cache(v, k);
@@ -126,12 +128,12 @@ public partial class SkywardC680Definition
             case "C680_CKPT_TMP_DN": sc.ExecuteCalculatorCodeUnique("(>B:SOV_ECS_1_Temp_Dec)"); return true;
             case "C680_CABIN_TMP_UP": sc.ExecuteCalculatorCodeUnique("(>B:SOV_ECS_2_Temp_Inc)"); return true;
             case "C680_CABIN_TMP_DN": sc.ExecuteCalculatorCodeUnique("(>B:SOV_ECS_2_Temp_Dec)"); return true;
+            case "C680_ELT": sc.ExecuteCalculatorCode($"{Rpn(value)} (>B:SAFETY_ELT_1_Set)"); return true;
             case "C680_HYD_AUX": sc.ExecuteCalculatorCode($"(A:CIRCUIT ON:120, Bool) {(value > 0.5 ? 0 : 1)} == if{{ 120 (>K:ELECTRICAL_CIRCUIT_TOGGLE) }}"); return true;
             case "C680_OXY_TEST_L": Pulse(sc, "Oxygen_L_Test", 1500); return true;
             case "C680_OXY_TEST_R": Pulse(sc, "Oxygen_R_Test", 1500); return true;
             case "C680_CVR_TEST": Pulse(sc, "SW_SOV_CVR_test_button", 5500); return true;
             case "C680_CVR_ERASE": Pulse(sc, "SW_SOV_CVR_erase_button", 2500); return true;
-            case "C680_ELT": sc.SetLVar("XMLVAR_ELT_STATE", value); return true;
         }
         return false;
     }

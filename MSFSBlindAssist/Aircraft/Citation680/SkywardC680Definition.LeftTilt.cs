@@ -34,10 +34,11 @@ public partial class SkywardC680Definition
         AddSwitch(v, "C680_ELEC_R", "SW_SOV_ELEC_ELEC_R", "Right ELEC Button", "Emer", "Norm");
         AddSwitch(v, "C680_TRU_L", "SW_SOV_ELEC_TRU_1", "Left TRU Button");
         AddSwitch(v, "C680_TRU_R", "SW_SOV_ELEC_TRU_2", "Right TRU Button");
-        AddSimSwitch(v, "C680_GEN_L", "ELECTRICAL GENERATOR SWITCH:1", "Left GEN Switch", help: "Off then On again is the reset.");
-        AddSimSwitch(v, "C680_GEN_R", "ELECTRICAL GENERATOR SWITCH:2", "Right GEN Switch", help: "Off then On again is the reset.");
+        AddSimSwitch(v, "C680_GEN_L", "LINE CONNECTION ON:409", "Left GEN Switch", help: "Reads back the generator's connection to its bus, so it shows On only once the generator is on line. Off then On again is the reset.");
+        AddSimSwitch(v, "C680_GEN_R", "LINE CONNECTION ON:86", "Right GEN Switch", help: "Reads back the generator's connection to its bus, so it shows On only once the generator is on line. Off then On again is the reset.");
         AddButton(v, "C680_EXT_PWR", "EXT PWR Button", "Connects or disconnects external power. Needs the GPU cart placed (Ground Equipment) and its door open.");
-        AddSimSwitch(v, "C680_APU_GEN", "APU GENERATOR SWITCH", "APU GEN Switch");
+        AddSimSwitch(v, "C680_APU_GEN", "LINE CONNECTION ON:639", "APU GEN Switch",
+            help: "Reads back the APU generator's bus connection. The aircraft puts it on line only with the APU at 100 percent, the left generator off line and no engine start in progress.");
         AddButton(v, "C680_BUS_TIE", "BUS TIE Button", "The aircraft only answers this button airborne; on the ground the bus tie is automatic.");
         AddSwitch(v, "C680_INTERIOR", "SW_SOV_ELEC_CABIN_PWR", "INTERIOR Button");
         AddSelector(v, "C680_EMER_LTS", "SW_SOV_SAFETY_LIGHTS_POSITION", "EMER LTS Switch", new[] { "Off", "Arm", "On" });
@@ -45,20 +46,21 @@ public partial class SkywardC680Definition
         AddSimReadout(v, "C680_BATT_R_V", "ELECTRICAL BATTERY VOLTAGE:2", "Right Battery Volts", "volts", "F1");
         AddSimReadout(v, "C680_BATT_L_A", "ELECTRICAL BATTERY LOAD:1", "Left Battery Amps", "amperes", "F0");
         AddSimReadout(v, "C680_BATT_R_A", "ELECTRICAL BATTERY LOAD:2", "Right Battery Amps", "amperes", "F0");
-        AddSimReadout(v, "C680_GEN_L_V", "ELECTRICAL GENALT BUS VOLTAGE:1", "Left Generator Volts", "volts", "F1");
-        AddSimReadout(v, "C680_GEN_R_V", "ELECTRICAL GENALT BUS VOLTAGE:2", "Right Generator Volts", "volts", "F1");
-        AddSimReadout(v, "C680_GEN_L_A", "ELECTRICAL GENALT BUS AMPS:1", "Left Generator Amps", "amperes", "F0");
-        AddSimReadout(v, "C680_GEN_R_A", "ELECTRICAL GENALT BUS AMPS:2", "Right Generator Amps", "amperes", "F0");
-        AddFlag(v, "C680_GEN_L_ON", "GENERAL ENG GENERATOR ACTIVE:1", "Left Generator", "Off line", "On line", simvar: true);
-        AddFlag(v, "C680_GEN_R_ON", "GENERAL ENG GENERATOR ACTIVE:2", "Right Generator", "Off line", "On line", simvar: true);
-        AddFlag(v, "C680_EXT_PWR_ON", "SW_SOV_EXT_GEN_CONN", "External Power", "Disconnected", "Connected");
+        AddSimReadout(v, "C680_GEN_L_V", "ELECTRICAL GENERATOR VOLTAGE:1", "Left Generator Volts", "volts", "F1");
+        AddSimReadout(v, "C680_GEN_R_V", "ELECTRICAL GENERATOR VOLTAGE:2", "Right Generator Volts", "volts", "F1");
+        AddSimReadout(v, "C680_GEN_L_A", "ELECTRICAL GENERATOR AMPS:1", "Left Generator Amps", "amperes", "F0");
+        AddSimReadout(v, "C680_GEN_R_A", "ELECTRICAL GENERATOR AMPS:2", "Right Generator Amps", "amperes", "F0");
+        AddFlag(v, "C680_GEN_L_ON", "LINE CONNECTION ON:409", "Left Generator", "Off line", "On line", simvar: true);
+        AddFlag(v, "C680_GEN_R_ON", "LINE CONNECTION ON:86", "Right Generator", "Off line", "On line", simvar: true);
+        AddFlag(v, "C680_EXT_PWR_ON", "LINE CONNECTION ON:637", "External Power", "Disconnected", "Connected", simvar: true);
         AddReadout(v, "C680_EXT_PWR_V", "SW_SOV_EXT_POWER_VOLTS", "External Power Volts", "number", "F1");
         AddFlag(v, "C680_EXT_PWR_AVAIL", "SW_SOV_EXT_GEN_AVAIL", "External Power Available", "No", "Yes");
-        AddFlag(v, "C680_BUS_TIE_CONN", "SW_SOV_BUS_TIE_CONN", "Bus Tie", "Open", "Closed");
+        AddFlag(v, "C680_BUS_TIE_CONN", "LINE CONNECTION ON:473", "Bus Tie", "Open", "Closed", simvar: true);
         AddFlag(v, "C680_AVN_POWER", "SW_SOV_AVIONICS_POWER_ACTIVE", "Avionics Power", "Off", "Active");
         AddFlag(v, "C680_STBY_LED_G", "STBY_PWR_LED_GREEN", "Standby Power Green LED", "Off", "On");
         AddFlag(v, "C680_STBY_LED_A", "STBY_PWR_LED_AMBER", "Standby Power Amber LED", "Off", "On");
-        AddSimReadout(v, "C680_APU_V", "APU VOLTS", "APU Generator Volts", "volts", "F1");
+        AddSimReadout(v, "C680_APU_V", "ELECTRICAL GENERATOR VOLTAGE:3", "APU Generator Volts", "volts", "F1");
+        AddSimReadout(v, "C680_APU_A", "ELECTRICAL GENERATOR AMPS:3", "APU Generator Amps", "amperes", "F0");
 
         // ---- APU
         AddSelector(v, "C680_APU_KNOB", "XMLVAR_APU_StarterKnob_Pos", "APU Knob", new[] { "Off", "On", "Start" },
@@ -68,7 +70,7 @@ public partial class SkywardC680Definition
         AddSimReadout(v, "C680_APU_RPM", "APU PCT RPM", "APU RPM", "percent", "F0");
         AddSimReadout(v, "C680_APU_EGT", "APU EGT", "APU EGT", "celsius", "F0");
         AddFlag(v, "C680_APU_COMB", "GENERAL_APU_COMBUSTION", "APU", "Not running", "Running");
-        AddFlag(v, "C680_APU_GEN_ON", "APU GENERATOR ACTIVE", "APU Generator", "Off line", "On line", simvar: true);
+        AddFlag(v, "C680_APU_GEN_ON", "LINE CONNECTION ON:639", "APU Generator", "Off line", "On line", simvar: true);
         AddFlag(v, "C680_APU_FIRE", "SW_SOV_APU_FIRE_LIGHT", "APU FIRE Light", "Out", "Lit");
         AddFlag(v, "C680_APU_BLEED_ON", "ELECTRICAL_APU_Bleed", "APU Bleed", "Closed", "Open");
 
@@ -156,7 +158,7 @@ public partial class SkywardC680Definition
         AddSwitch(v, "C680_AMBIENT", "SW_SOV_GARMIN_AMBIENT_LIGHT", "Garmin Ambient Light Sensor");
         AddSwitch(v, "C680_LIGHT_ENTRY", "SW_SOV_LIGHT_ENTRY", "Entry Light");
 
-        foreach (var k in new[] { "C680_GEN_L_ON", "C680_GEN_R_ON", "C680_EXT_PWR_ON", "C680_APU_RPM", "C680_APU_GEN_ON", "C680_COMB_L", "C680_COMB_R",
+        foreach (var k in new[] { "C680_EXT_PWR_ON", "C680_APU_RPM", "C680_COMB_L", "C680_COMB_R",
             "C680_N1_L", "C680_N1_R", "C680_N2_L", "C680_N2_R", "C680_ITT_L", "C680_ITT_R", "C680_FF_L", "C680_FF_R",
             "C680_OIL_P_L", "C680_OIL_P_R", "C680_OIL_T_L", "C680_OIL_T_R", "C680_AVN_POWER" })
             Cache(v, k);
@@ -172,7 +174,7 @@ public partial class SkywardC680Definition
     private static readonly List<string> ElectricalDisplay = new()
     {
         "C680_BATT_L_V", "C680_BATT_L_A", "C680_BATT_R_V", "C680_BATT_R_A",
-        "C680_GEN_L_ON", "C680_GEN_L_V", "C680_GEN_L_A", "C680_GEN_R_ON", "C680_GEN_R_V", "C680_GEN_R_A", "C680_APU_V",
+        "C680_GEN_L_ON", "C680_GEN_L_V", "C680_GEN_L_A", "C680_GEN_R_ON", "C680_GEN_R_V", "C680_GEN_R_A", "C680_APU_V", "C680_APU_A",
         "C680_EXT_PWR_AVAIL", "C680_EXT_PWR_ON", "C680_EXT_PWR_V", "C680_BUS_TIE_CONN", "C680_AVN_POWER",
         "C680_STBY_LED_G", "C680_STBY_LED_A"
     };
@@ -218,7 +220,7 @@ public partial class SkywardC680Definition
             case "C680_GEN_L": sc.ExecuteCalculatorCode($"1 {Rpn(value)} (>K:2:ALTERNATOR_SET)"); return true;
             case "C680_GEN_R": sc.ExecuteCalculatorCode($"2 {Rpn(value)} (>K:2:ALTERNATOR_SET)"); return true;
             case "C680_EXT_PWR": sc.ExecuteCalculatorCodeUnique("(>H:SW_SOV_ELEC_EXT_PWR)"); return true;
-            case "C680_APU_GEN": sc.ExecuteCalculatorCode($"{Rpn(value)} (>B:ELECTRICAL_APU_Generator_1_Set)"); return true;
+            case "C680_APU_GEN": sc.ExecuteCalculatorCode($"3 {Rpn(value)} (>K:2:APU_GENERATOR_SWITCH_SET)"); return true;
             case "C680_BUS_TIE": sc.ExecuteCalculatorCodeUnique("(>H:SW_SOV_ELEC_BUS_TIE)"); return true;
             case "C680_APU_KNOB": SetApuKnob(sc, (int)Math.Round(value)); return true;
             case "C680_STARTER_L": sc.ExecuteCalculatorCode("(>B:ENGINE_Starter_1_On)"); return true;
