@@ -48,11 +48,7 @@ public class C680PanelStructureTests
     /// off the list; the mirror assertion fails when a built panel is still listed, so the list
     /// cannot go stale in either direction.
     /// </summary>
-    public static readonly string[] NotBuiltYet =
-    {
-        "Doors and Service Panels", "Ground Equipment", "Payload and Fuel Load", "Water and Waste",
-        "Crew Seat", "EFB Options"
-    };
+    public static readonly string[] NotBuiltYet = Array.Empty<string>();
 
     [Fact]
     public void EveryPanelIsBuiltOrKnownUnbuilt()

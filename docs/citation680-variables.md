@@ -145,3 +145,14 @@ debugger (`tools/coherent-eval.ps1 -Title WTG3000_MFD -ExprFile …` with
 | Circuit breakers | `L:CB_<name>` + `'<line>'_n (>K:ELECTRICAL_LINE_BREAKER_TOGGLE)` | 111 breakers generated from `SOV_Circuit_Breakers.xml` by `tools/c680-gen/gen-breakers.js` (`CB_J` has no line and is skipped). `CB_FLIGHT_HOUR_METER` pulled with the model's own click code: L:var 0 → 1, pushed back. |
 | Display reversion | `L:INSTRUMENT_Push_DisplayReverse_1/2` | pulses (the model's push buttons). `L:SW_SOV_CONFIG_Baro_Sync` is the EFB's baro-sync setting. |
 | FMS rows | `GPS WP DISTANCE`, `GPS WP ETE`, `GPS ETE`, `GPS FLIGHT PLAN TOTAL DISTANCE`, `GPS IS ACTIVE FLIGHT PLAN` | stock. `GPS WP NEXT ID` is a string SimVar the app cannot register — the touchscreen window reads the ident. |
+
+### Cabin, ground and simulation (2026-09-10)
+
+| Control | Variable | Measured / source |
+|---|---|---|
+| Ground equipment | `L:Static_Gear_Chock_L/R/C` (1 at the gate), `Static_Pitot_1..3` (1), `Static_AOA_L/R` (1), `Static_Engine_Cover_L/R` (0), `Static_Wing_L/R_1..6`, `Static_Wing_T_1..6` (0), `gpu_cart`, `SW_SOV_HYDRAULICS_Ground_Active`, `Oxygen_Tank_L_Fill_Active`, `SW_SOV_Water_Waste`, `Fuel_truck_Visible`, `VIP_Vehicles`, `SW_SOV_Carpet`, `SW_SOV_Static_Windshield_Cover` | each an L:var the EFB Services card toggles (chocks proven from the EFB in the assessment). ⚠️ Engine covers written 1 with the engines RUNNING reverted to 0 within 2 s — the aircraft refuses them on a running engine (its own rule; try again engines off). |
+| Water | `L:SW_SOV_Water_Quantity_clean` 7.5, `_Blue_Juice` 7.5, `_Waste_Purity` 0, `Water_tank_sink_lid` 0 → 1 → 0 | |
+| Doors and panels | `L:SW_SOV_PANELS_*` (all 0 at the gate), `BAT_DISC_L/R_2`, `SW_SOV_CAS_Door_open`, `SW_SOV_MAIN_DOOR_LEAK` | plain toggles in the model. |
+| Payload | `PAYLOAD STATION COUNT` 16; stations 1 and 2 190 lb (crew), the rest 0; `TOTAL WEIGHT` 24155, `EMPTY WEIGHT` 17831, `MAX GROSS WEIGHT` 30775 | station names are string SimVars SimConnect cannot deliver here ("does not recognise SimVar PAYLOAD STATION NAME"). |
+| Fuel load | `FUELSYSTEM TANK LEVEL:1/2` percent of 850 gal | proven 2026-09-09 (55 percent). |
+| EFB options | `L:SW_SOV_REALISTIC_PB` 1, `SW_SOV_Wifi_available` 1, the `SW_SOV_CONFIG_*` and `SW_SOV_PAX_VIP_*` L:vars 0 | ⚠️ `SW_SOV_ATC_SOURCE` is NOT an L:var: the plugin reads it with `GetStoredData` (a datastore key), so the ACARS provider is set only on the EFB Settings page. The ANC enum order is not in the names; read it off the EFB page. |

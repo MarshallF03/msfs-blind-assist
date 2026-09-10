@@ -87,6 +87,12 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         controls[MfdGtcPanel] = new(MfdGtcControls);
         controls[DisplaysPanel] = new(DisplaysControls);
         controls[BreakersPanel] = new(BreakersControls);
+        controls[DoorsPanel] = new(DoorsControls);
+        controls[GroundPanel] = new(GroundControls);
+        controls[PayloadPanel] = new(PayloadControls);
+        controls[WaterPanel] = new(WaterControls);
+        controls[SeatPanel] = new(SeatControls);
+        controls[EfbOptionsPanel] = new(EfbOptionsControls);
         return controls;
     }
 
@@ -100,6 +106,8 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         Add(BuildPedestalVariables());
         Add(BuildAvionicsVariables());
         Add(BuildBreakerVariables());
+        Add(BuildCabinVariables());
+        Add(BuildSimulationVariables());
         return vars;
     }
 
@@ -124,7 +132,10 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         [FlightControlsPanel] = new(FlightControlsDisplay),
         [YokePanel] = new(YokeDisplay),
         [PilotGtcPanel] = new(PilotGtcDisplay),
-        [MfdGtcPanel] = new(MfdGtcDisplay)
+        [MfdGtcPanel] = new(MfdGtcDisplay),
+        [DoorsPanel] = new(DoorsDisplay),
+        [PayloadPanel] = new(PayloadDisplay),
+        [WaterPanel] = new(WaterDisplay)
     };
     public override Dictionary<string, string> GetButtonStateMapping() => new();
 
@@ -158,6 +169,8 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         if (HandlePedestalSet(varKey, value, simConnect, announcer)) return true;
         if (HandleAvionicsSet(varKey, value, simConnect)) return true;
         if (HandleBreakerSet(varKey, value, simConnect)) return true;
+        if (HandleCabinSet(varKey, value, simConnect)) return true;
+        if (HandleSimulationSet(varKey, value, simConnect)) return true;
         return base.HandleUIVariableSet(varKey, value, varDef, simConnect, announcer);
     }
 
@@ -184,6 +197,8 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
             case "C680_SAI_LIMITS": displayText = "Low 100 knots, Vne 305, Mmo 0.80, altitude max 47000"; return true;
         }
         if (TryAvionicsDisplay(varKey, value, out displayText)) return true;
+        if (TryCabinDisplay(varKey, out displayText)) return true;
+        if (TrySimulationDisplay(varKey, out displayText)) return true;
         return base.TryGetDisplayOverride(varKey, value, out displayText);
     }
 
