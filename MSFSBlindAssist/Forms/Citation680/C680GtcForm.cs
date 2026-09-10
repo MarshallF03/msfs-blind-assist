@@ -10,15 +10,17 @@ namespace MSFSBlindAssist.Forms.Citation680;
 /// button and the knob labels, read through coherent-gtc-agent.js over the Coherent debugger.
 /// Enter on a button row presses it; on a keyboard or keypad page typed keys press the
 /// on-screen keys; Ctrl/Alt arrow chords turn the knobs; Ctrl+Home / Ctrl+Backspace / Ctrl+G
-/// press Home / Back / MSG; F5 re-reads; Escape closes. The Side combo swaps the window to the
-/// other seat's unit (PFD GTC 1 or 4, MFD GTC 2 or 3).
+/// press Home / Back / MSG; Ctrl+R hides or shows the two persistent bars (radios, XPDR / Back /
+/// Home / MSG) every page carries; F5 re-reads; Escape closes. The Side combo swaps the window
+/// to the other seat's unit (PFD GTC 1 or 4, MFD GTC 2 or 3).
 /// </summary>
 public sealed class C680GtcForm : Form
 {
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
 
-    private const int SettleMs = 350;
+    private const int PressSettleMs = 900;   // a page press: the GTC's view slide still reports the old view's buttons 700 ms in (measured 2026-09-10)
+    private const int KeySettleMs = 250;     // a typed key on a keyboard page
     private readonly bool _isMfd;
     private C680Seat.Side _seat;
     private readonly ScreenReaderAnnouncer _announcer;
@@ -32,6 +34,7 @@ public sealed class C680GtcForm : Form
     private bool _everConnected;
     private string? _pendingPage;
     private bool _acting;
+    private bool _hideBars;
 
     public C680GtcForm(bool isMfd, C680Seat.Side seat, ScreenReaderAnnouncer announcer, Action<C680Seat.Side> seatChanged)
     {
@@ -98,9 +101,10 @@ public sealed class C680GtcForm : Form
 
     private void ApplyRows(IReadOnlyList<string> rows)
     {
-        _rows = C680GtcRows.Parse(rows);
+        var parsed = C680GtcRows.Parse(rows);
+        _rows = _hideBars ? C680GtcRows.WithoutBars(parsed) : parsed;
         int keep = _list.SelectedIndex;
-        _list.SetLines(rows);
+        _list.SetLines(_rows.Select(r => r.Raw).ToList());
         if (keep >= 0 && keep < _list.Items.Count && _list.SelectedIndex < 0) _list.SelectedIndex = keep;
         if (_list.SelectedIndex < 0 && _list.Items.Count > 0) _list.SelectedIndex = 0;
     }
@@ -116,6 +120,13 @@ public sealed class C680GtcForm : Form
         if (_client == null) { base.OnKeyDown(e); return; }
         if (e.KeyData == Keys.Escape) { e.Handled = true; Close(); return; }
         if (e.KeyData == Keys.F5) { e.Handled = true; ApplyRows(await _client.ScrapeNowAsync()); return; }
+        if (e.KeyData == (Keys.Control | Keys.R))
+        {
+            e.Handled = true; _hideBars = !_hideBars;
+            ApplyRows(await _client.ScrapeNowAsync());
+            _announcer.AnnounceImmediate(_hideBars ? "Radio and bottom bars hidden" : "Radio and bottom bars shown");
+            return;
+        }
         if (_side.Focused && !e.Control && !e.Alt) { base.OnKeyDown(e); return; }   // let the combo take its own keys
 
         var knob = C680GtcRows.KeyToKnob(e.KeyData);
@@ -133,22 +144,26 @@ public sealed class C680GtcForm : Form
                 e.Handled = true; e.SuppressKeyPress = true;
                 var b = _rows[i];
                 if (!b.Enabled) { _announcer.AnnounceImmediate(b.Label + " is disabled"); return; }
-                await Act($"__MSFSBA_GTC.click({b.ButtonIndex})", b.Label);
+                await Act($"__MSFSBA_GTC.click({b.ButtonIndex})", b.Label, pressedIndex: i);
                 return;
             }
         }
-        var label = C680GtcRows.KeyToButtonLabel(e.KeyData, keyboard);
+        var label = C680GtcRows.KeyToButtonLabel(e.KeyData, keyboard, _rows);
         if (label != null)
         {
             e.Handled = true; e.SuppressKeyPress = true;
-            await Act($"__MSFSBA_GTC.press({Js(label)})", label, speakTitleChange: false);
+            await Act($"__MSFSBA_GTC.press({Js(label)})", label, speakTitleChange: false, settleMs: KeySettleMs);
             return;
         }
         base.OnKeyDown(e);
     }
 
-    /// <summary>Drive the page, wait for it to settle, re-read, and say what changed: the new page title, else what was pressed.</summary>
-    private async Task Act(string expr, string spoken, bool speak = true, bool speakTitleChange = true)
+    /// <summary>
+    /// Drive the page, wait for it to settle, re-read, and say what changed: the new page title; else,
+    /// for a pressed row whose button was relabelled by the press ("Nav Source FMS" → "Nav Source
+    /// LOC1"), the new label; else what was pressed.
+    /// </summary>
+    private async Task Act(string expr, string spoken, bool speak = true, bool speakTitleChange = true, int pressedIndex = -1, int settleMs = PressSettleMs)
     {
         if (_client == null) return;
         _acting = true;
@@ -157,7 +172,7 @@ public sealed class C680GtcForm : Form
             string r = await _client.InvokeAsync(expr);
             if (r == "none" || r == "stale") { _announcer.AnnounceImmediate(spoken + " is not on this page"); return; }
             if (r.Length == 0) { _announcer.AnnounceImmediate("The touchscreen did not answer"); return; }
-            await Task.Delay(SettleMs);
+            await Task.Delay(settleMs);
             var rows = await _client.ScrapeNowAsync();
             ApplyRows(rows);
             string title = C680GtcRows.TitleOf(_rows);
@@ -166,7 +181,7 @@ public sealed class C680GtcForm : Form
             if (!speak) return;
             if (titleChanged && speakTitleChange) _announcer.AnnounceImmediate(title);
             else if (!speakTitleChange) { /* typed key: the screen reader already spoke the keystroke */ }
-            else _announcer.AnnounceImmediate(spoken);
+            else _announcer.AnnounceImmediate(C680GtcRows.SpokenAfterPress(_rows, pressedIndex, spoken));
         }
         finally { _acting = false; }
     }

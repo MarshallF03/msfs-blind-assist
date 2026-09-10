@@ -119,7 +119,7 @@ public partial class SkywardC680Definition
             case HotkeyAction.FCUSetSpeed:
                 ShowTypedTarget(parent, ann, "Set Speed Target", "Speed", "100 to 305 knots, or 0.30 to 0.80 Mach",
                     s => double.TryParse(s, out var v) && ((v >= 0.3 && v <= 0.8) || (v >= 100 && v <= 305)) ? (true, "") : (false, "Enter 100 to 305 knots or 0.30 to 0.80 Mach"),
-                    v => { if (v < 1) { sc.ExecuteCalculatorCode($"{Rpn(v * 100)} (>K:AP_MACH_VAR_SET)"); return $"Mach {v:0.00}"; } sc.ExecuteCalculatorCode($"{Rpn(v)} (>K:AP_SPD_VAR_SET)"); return $"{v:0} knots"; });
+                    v => { SetSpeedTarget(sc, v); return v < 1 ? $"Mach {v:0.00}" : $"{v:0} knots"; });
                 return true;
             case HotkeyAction.FCUSetVS:
                 ShowTypedTarget(parent, ann, "Set Vertical Speed Target", "Vertical speed", "-6000 to 6000 feet per minute",

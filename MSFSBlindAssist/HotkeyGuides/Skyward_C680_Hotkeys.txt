@@ -32,8 +32,13 @@ Inside a touchscreen window:
   Alt+Up/Down     Middle knob increase / decrease; Alt+Enter push it
   Ctrl+Shift+Arrows  Joystick nudge; Ctrl+Shift+Space joystick push
   Ctrl+Home       Home page; Ctrl+Backspace Back; Ctrl+G MSG
+  Ctrl+R          Hide or show the radio bar and the bottom bar (XPDR, Back, Home, MSG)
+                  that every page carries; they are listed after the page's own buttons
   Side combo      Switch the window to the other seat's unit
   F5              Re-read the screen; Escape closes
+  Note: on MFD Home, Map / Traffic / Weather select what the touchscreen's half of the MFD
+  shows (press again for that display's settings). On PFD Home, Nav Source cycles the
+  autopilot's lateral source (FMS, LOC1, ...) on every press - read the label first.
 
 Inside the EFB window:
   Page combo / Tab combo   Change page and tab
@@ -86,7 +91,8 @@ INPUT MODE - Press left bracket to activate
 
   Ctrl+A     Set altitude preselect (100 to 47000, rounded to 100)
   Ctrl+H     Set heading bug
-  Ctrl+S     Set speed target (knots, or 0.xx for Mach)
+  Ctrl+S     Set speed target (knots, or 0.xx for Mach). Switches the G3000's speed source
+             from FMS to Manual first - in FMS mode the aircraft ignores typed targets
   Ctrl+V     Set vertical speed target (negative for down)
   Ctrl+B     Set both PFD altimeters (hPa or inches; "std" for standard)
   Ctrl+N     NAV radios dialog

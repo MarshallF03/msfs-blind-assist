@@ -41,17 +41,25 @@ public static class C680GtcRows
     public static string TitleOf(IReadOnlyList<GtcRow> rows)
         => rows.FirstOrDefault(r => r.Kind == Kind.Title)?.Label ?? "";
 
-    /// <summary>True on a keyboard (letters) or keypad (digits + Enter) page, where typed keys press on-screen keys.</summary>
+    /// <summary>
+    /// True on a keyboard (letters) or keypad (digits with Enter, or with BKSP — the PFD Minimums
+    /// keypad has digits and BKSP but no Enter, measured 2026-09-10) page, where typed keys press
+    /// on-screen keys.
+    /// </summary>
     public static bool IsKeyboardPage(IReadOnlyList<GtcRow> rows)
     {
-        var labels = rows.Where(r => r.Kind == Kind.Button).Select(r => r.Label).ToHashSet(StringComparer.Ordinal);
+        var labels = ButtonLabels(rows);
         bool letters = labels.Contains("A") && labels.Contains("B") && labels.Contains("C");
-        bool digits = labels.Contains("0") && labels.Contains("9") && labels.Contains("Enter");
+        bool digits = labels.Contains("0") && labels.Contains("9") && (labels.Contains("Enter") || labels.Contains("BKSP") || labels.Contains("Backspace"));
         return letters || digits;
     }
 
-    /// <summary>A typed key → the on-screen key's label, only while a keyboard or keypad page is up.</summary>
-    public static string? KeyToButtonLabel(Keys key, bool keyboardUp)
+    /// <summary>
+    /// A typed key → the on-screen key's label, only while a keyboard or keypad page is up. Backspace
+    /// becomes whichever spelling the page carries ("Backspace" on the keyboard, "BKSP" on the
+    /// Minimums keypad); with no page rows to consult it stays "Backspace".
+    /// </summary>
+    public static string? KeyToButtonLabel(Keys key, bool keyboardUp, IReadOnlyList<GtcRow>? rows = null)
     {
         if (!keyboardUp) return null;
         if ((key & (Keys.Control | Keys.Alt)) != 0) return null;
@@ -61,12 +69,45 @@ public static class C680GtcRows
         if (k >= Keys.NumPad0 && k <= Keys.NumPad9) return ((char)('0' + (k - Keys.NumPad0))).ToString();
         return k switch
         {
-            Keys.Back => "Backspace",
+            Keys.Back => rows != null && !ButtonLabels(rows).Contains("Backspace") && ButtonLabels(rows).Contains("BKSP") ? "BKSP" : "Backspace",
             Keys.Enter => "Enter",
             Keys.Space => "SPC",
             Keys.OemPeriod or Keys.Decimal => ".",
             _ => null
         };
+    }
+
+    private static HashSet<string> ButtonLabels(IReadOnlyList<GtcRow> rows)
+        => rows.Where(r => r.Kind == Kind.Button).Select(r => r.Label).ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The rows without the two persistent bars every GTC page carries — the agent marks them with
+    /// "Radio bar:" (Audio &amp; Radios, COM/MIC/MON) and "Bottom bar:" (XPDR, Back, Home, MSG) and
+    /// lists them after the page's own buttons, before the Knobs row. Button indices are the agent's
+    /// and survive the filter, so a kept row still presses the right button.
+    /// </summary>
+    public static IReadOnlyList<GtcRow> WithoutBars(IReadOnlyList<GtcRow> rows)
+    {
+        var list = new List<GtcRow>(); bool inBar = false;
+        foreach (var r in rows)
+        {
+            if (r.Kind == Kind.Text && (r.Raw == "Radio bar:" || r.Raw == "Bottom bar:")) { inBar = true; continue; }
+            if (r.Kind == Kind.Knobs) inBar = false;
+            if (!inBar) list.Add(r);
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// After a press that left the page title unchanged, what to speak: the button's NEW label when
+    /// the row at the pressed index is a button whose label moved ("Nav Source FMS" → "Nav Source
+    /// LOC1", "Bearing 1 OFF" → "Bearing 1 NAV1"), else the label that was pressed.
+    /// </summary>
+    public static string SpokenAfterPress(IReadOnlyList<GtcRow> rows, int pressedIndex, string pressedLabel)
+    {
+        if (pressedIndex >= 0 && pressedIndex < rows.Count && rows[pressedIndex].Kind == Kind.Button && rows[pressedIndex].Label != pressedLabel)
+            return rows[pressedIndex].Label;
+        return pressedLabel;
     }
 
     /// <summary>Knob and joystick chords → the H: event suffix for a VERTICAL GTC (the Sovereign's four are all vertical).</summary>

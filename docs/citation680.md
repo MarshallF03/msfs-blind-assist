@@ -56,6 +56,28 @@ ground; engine covers with an engine running revert by the aircraft's own rule).
 The Crew Seat setting (Simulation section, saved) decides which units the seat keys open and
 which altimeter B reads.
 
+Touchscreen conveniences: a page's own buttons come first and the two bars every page carries
+(radios on top, XPDR / Back / Home / MSG at the bottom) follow under "Radio bar:" and "Bottom
+bar:" markers — Ctrl+R hides them. A press that relabels its own button ("Nav Source FMS" →
+"Nav Source LOC1", "Bearing 1 OFF" → "Bearing 1 NAV1") speaks the new label. On MFD Home,
+Map / Traffic / Weather are pane selectors: the first press shows that display in the
+touchscreen's half of the MFD, the second opens its settings. Nav Source on PFD Home CYCLES the
+autopilot's lateral source on every press; check the label before pressing it in NAV.
+
+**Speed target.** The G3000 has two speed sources. In FMS mode it computes the FLC speed from
+the performance plan and silently refuses every typed target (the target sat at 80 knots
+whatever was entered — measured airborne). Ctrl+S, the panel entry and the autopilot window
+therefore switch the source to Manual before setting the target, the same thing pressing the
+speed knob does on the real aircraft; the "Speed Source" switch (FMS / Manual) is on the
+Autopilot panel and in the Ctrl+P window.
+
+**SimBrief flight plans.** Log in once on the EFB (Shift+T → Settings → 3rd Party Options: the
+"[*]" button under SimBrief User ID opens a keypad; type the ID, Set ID; "Log In / Go to
+Charts" for Navigraph). The flight plans then live where the real aircraft keeps them: MFD
+touchscreen → Services → ACARS → Flight Plan Request lists the account's generated plans;
+selecting one loads it into the FMS. The EFB's Flight page has its own "[Fetch SimBrief OFP]"
+for reading the OFP text.
+
 ## Announcements
 
 - **CAS**: a monitor over the pilot PFD's list speaks each posted and cleared message with its

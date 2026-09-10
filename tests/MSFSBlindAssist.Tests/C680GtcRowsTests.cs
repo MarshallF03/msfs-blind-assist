@@ -40,6 +40,35 @@ public class C680GtcRowsTests
     }
 
     [Fact]
+    public void MinimumsKeypadWithBkspAndNoEnterIsAKeypad()
+    {
+        var mins = C680GtcRows.Parse(new[] { "Page: Minimums", "[0]", "[1]", "[9]", "[BKSP]", "[Minimums Baro]" });
+        Assert.True(C680GtcRows.IsKeyboardPage(mins));
+        Assert.Equal("BKSP", C680GtcRows.KeyToButtonLabel(Keys.Back, keyboardUp: true, mins));
+        var kb = C680GtcRows.Parse(new[] { "Page: Add Origin", "[A]", "[B]", "[C]", "[Backspace]", "[Enter]" });
+        Assert.Equal("Backspace", C680GtcRows.KeyToButtonLabel(Keys.Back, keyboardUp: true, kb));
+    }
+
+    [Fact]
+    public void BarsCanBeHiddenWithoutMovingButtonIndices()
+    {
+        var rows = C680GtcRows.Parse(new[] { "Page: Services", "[Music] (disabled)", "[ACARS]", "Radio bar:", "[Audio & Radios]", "[COM1 124.850]", "Bottom bar:", "[Back]", "[Home]", "Knobs: a / b" });
+        var kept = C680GtcRows.WithoutBars(rows);
+        Assert.Equal(new[] { "Page: Services", "[Music] (disabled)", "[ACARS]", "Knobs: a / b" }, kept.Select(r => r.Raw).ToArray());
+        Assert.Equal(1, kept.Single(r => r.Label == "ACARS").ButtonIndex);
+        Assert.Equal(4, rows.Single(r => r.Label == "Back").ButtonIndex);
+    }
+
+    [Fact]
+    public void APressThatRelabelsItsButtonSpeaksTheNewLabel()
+    {
+        var after = C680GtcRows.Parse(new[] { "Page: PFD Home", "[Nav Source LOC1]", "[Bearing 1 OFF]" });
+        Assert.Equal("Nav Source LOC1", C680GtcRows.SpokenAfterPress(after, 1, "Nav Source FMS"));
+        Assert.Equal("Bearing 1 OFF", C680GtcRows.SpokenAfterPress(after, 2, "Bearing 1 OFF"));
+        Assert.Equal("Home", C680GtcRows.SpokenAfterPress(after, -1, "Home"));
+    }
+
+    [Fact]
     public void TypedKeysMapToOnScreenLabels()
     {
         Assert.Equal("K", C680GtcRows.KeyToButtonLabel(Keys.K, keyboardUp: true));

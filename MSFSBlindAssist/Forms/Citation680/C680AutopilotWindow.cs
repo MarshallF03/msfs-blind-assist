@@ -42,6 +42,7 @@ public class C680AutopilotWindow : Form
             ("FLC", "C680_AP_FLC", true), ("VNAV", "C680_AP_VNAV", false),
             ("TO/GA", "C680_TOGA", false), ("AT", "C680_AT_ARM", false),
             ("AT Disconnect", "C680_AT_DISC", false), ("AP Disconnect", "C680_AP_DISC", false),
+            ("Speed Source", "C680_AP_SPD_MANUAL", true),
         };
         const int col1 = 15, col2 = 215, w = 190, h = 38, rowH = 48;
         int y = 15, tab = 0;

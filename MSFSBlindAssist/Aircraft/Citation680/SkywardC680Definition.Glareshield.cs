@@ -47,6 +47,8 @@ public partial class SkywardC680Definition
         AddSimReadout(v, "C680_AP_SPD_TGT", "AUTOPILOT AIRSPEED HOLD VAR", "Speed Target", "knots", "F0");
         AddSimReadout(v, "C680_AP_MACH_TGT", "AUTOPILOT MACH HOLD VAR", "Mach Target", "number", "F2");
         AddFlag(v, "C680_AP_SPD_IS_MACH", "AUTOPILOT MANAGED SPEED IN MACH", "Speed Units", "Knots", "Mach", simvar: true);
+        AddSwitch(v, "C680_AP_SPD_MANUAL", "XMLVAR_SpeedIsManuallySet", "Speed Source", "FMS", "Manual",
+            "FMS lets the G3000 compute the FLC speed from the performance plan and REFUSES every typed target; Manual takes the typed target. Setting a target switches to Manual.");
         AddStateReadout(v, "C680_AT_STATUS", "SW_SOV_Autothrottle_Status", "Autothrottle",
             new Dictionary<double, string> { [0] = "Off", [1] = "Disconnected", [2] = "Armed", [3] = "On" });
         AddFlag(v, "C680_AP_GS", "AUTOPILOT GLIDESLOPE ACTIVE", "Glideslope", "Not captured", "Captured", simvar: true);
@@ -95,8 +97,8 @@ public partial class SkywardC680Definition
         return v;
     }
 
-    private static readonly List<string> AutopilotControls = new() { "C680_AP_MASTER", "C680_AP_YD", "C680_AP_FD_L", "C680_AP_FD_R", "C680_AP_HDG", "C680_AP_NAV", "C680_AP_APR", "C680_AP_BC", "C680_AP_ALT", "C680_AP_VS", "C680_AP_FLC", "C680_AP_VNAV", "C680_AT_ARM", "C680_AT_DISC", "C680_AP_ALT_SET", "C680_AP_HDG_SET", "C680_AP_VS_SET", "C680_AP_SPD_SET", "C680_TOGA", "C680_AP_DISC", "C680_CWS" };
-    private static readonly List<string> AutopilotDisplay = new() { "C680_AP_ALT_SEL", "C680_AP_HDG_BUG", "C680_AP_VS_TGT", "C680_AP_SPD_TGT", "C680_AP_MACH_TGT", "C680_AP_SPD_IS_MACH", "C680_AT_STATUS", "C680_AP_APR_ARMED", "C680_AP_GS" };
+    private static readonly List<string> AutopilotControls = new() { "C680_AP_MASTER", "C680_AP_YD", "C680_AP_FD_L", "C680_AP_FD_R", "C680_AP_HDG", "C680_AP_NAV", "C680_AP_APR", "C680_AP_BC", "C680_AP_ALT", "C680_AP_VS", "C680_AP_FLC", "C680_AP_VNAV", "C680_AT_ARM", "C680_AT_DISC", "C680_AP_ALT_SET", "C680_AP_HDG_SET", "C680_AP_VS_SET", "C680_AP_SPD_SET", "C680_AP_SPD_MANUAL", "C680_TOGA", "C680_AP_DISC", "C680_CWS" };
+    private static readonly List<string> AutopilotDisplay = new() { "C680_AP_ALT_SEL", "C680_AP_HDG_BUG", "C680_AP_VS_TGT", "C680_AP_SPD_TGT", "C680_AP_MACH_TGT", "C680_AP_SPD_IS_MACH", "C680_AP_SPD_MANUAL", "C680_AT_STATUS", "C680_AP_APR_ARMED", "C680_AP_GS" };
     private static readonly List<string> WarningControls = new() { "C680_MASTER_WARN_ACK", "C680_MASTER_CAUT_ACK", "C680_FIRE_L_COVER", "C680_FIRE_L", "C680_BOTTLE_L", "C680_FIRE_R_COVER", "C680_FIRE_R", "C680_BOTTLE_R", "C680_FIRE_APU_COVER", "C680_FIRE_APU", "C680_BAG_FIRE_COVER", "C680_BAG_FIRE", "C680_BAG_BOTTLE_COVER", "C680_BAG_BOTTLE", "C680_TEST_ANNUN" };
     private static readonly List<string> WarningDisplay = new() { "C680_MASTER_WARN", "C680_MASTER_CAUT", "C680_FIRE_L_LIT", "C680_BOTTLE_L_LIT", "C680_FIRE_R_LIT", "C680_BOTTLE_R_LIT", "C680_FIRE_APU_LIT", "C680_BAG_FIRE_LIT", "C680_BAG_BOTTLE_LIT" };
     private static readonly List<string> StandbyControls = new() { "C680_SAI_BL_MODE", "C680_SAI_BL", "C680_SAI_QNH_UNIT", "C680_SAI_METER", "C680_SAI_TURN", "C680_SAI_GS" };
@@ -108,6 +110,21 @@ public partial class SkywardC680Definition
         "C680_BAG_FIRE_COVER", "C680_BAG_BOTTLE_COVER", "C680_TEST_ANNUN",
         "C680_SAI_BL_MODE", "C680_SAI_BL", "C680_SAI_QNH_UNIT", "C680_SAI_METER", "C680_SAI_TURN", "C680_SAI_GS"
     };
+
+    /// <summary>
+    /// The FLC speed target. The G3000's FmsSpeedManager (mfd.js) INTERCEPTS AP_SPD_VAR_SET,
+    /// AP_SPD_VAR_SET_EX1, AP_MACH_VAR_SET and the DEC events and only passes them through while
+    /// L:XMLVAR_SpeedIsManuallySet is 1 (its ap_selected_speed_is_manual topic) — in FMS speed mode
+    /// every absolute set is silently swallowed and the target sat at 80 knots (measured airborne
+    /// 2026-09-10: 250 (>K:AP_SPD_VAR_SET) left 80; AP_SPD_VAR_INC, not intercepted, moved it to 81;
+    /// with the flag set the same set landed 200). So a typed target always switches to manual
+    /// first, the same thing pressing the speed knob does on the real GTC. Mach goes as hundredths.
+    /// </summary>
+    private static void SetSpeedTarget(SimConnectManager sc, double value)
+    {
+        string set = value < 1 ? $"{Rpn(Math.Round(value * 100))} (>K:AP_MACH_VAR_SET)" : $"{Rpn(Math.Round(value))} (>K:AP_SPD_VAR_SET)";
+        sc.ExecuteCalculatorCode($"1 (>L:XMLVAR_SpeedIsManuallySet) {set}");
+    }
 
     private bool HandleGlareshieldSet(string varKey, double value, SimConnectManager sc)
     {
@@ -136,10 +153,8 @@ public partial class SkywardC680Definition
             case "C680_AP_ALT_SET": sc.ExecuteCalculatorCode($"{Rpn(Math.Round(value / 100) * 100)} (>K:AP_ALT_VAR_SET_ENGLISH)"); return true;
             case "C680_AP_HDG_SET": sc.ExecuteCalculatorCode($"{Rpn(((value % 360) + 360) % 360)} (>K:HEADING_BUG_SET)"); return true;
             case "C680_AP_VS_SET": sc.ExecuteCalculatorCode($"{Rpn(Math.Round(value / 100) * 100)} (>K:AP_VS_VAR_SET_ENGLISH)"); return true;
-            case "C680_AP_SPD_SET":
-                if (value < 1) sc.ExecuteCalculatorCode($"{Rpn(value * 100)} (>K:AP_MACH_VAR_SET)");
-                else sc.ExecuteCalculatorCode($"{Rpn(value)} (>K:AP_SPD_VAR_SET)");
-                return true;
+            case "C680_AP_SPD_SET": SetSpeedTarget(sc, value); return true;
+            case "C680_AP_SPD_MANUAL": sc.SetLVar("XMLVAR_SpeedIsManuallySet", value); return true;
             case "C680_TOGA": sc.ExecuteCalculatorCodeUnique("(>K:AUTO_THROTTLE_TO_GA)"); return true;
             case "C680_AP_DISC": Pulse(sc, "SW_SOV_AUTOPILOT_Push_Disconnect_1_Pressed", 300); sc.ExecuteCalculatorCodeUnique("(>K:AUTOPILOT_OFF)"); return true;
 
