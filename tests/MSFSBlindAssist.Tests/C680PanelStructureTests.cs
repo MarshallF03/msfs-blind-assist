@@ -50,7 +50,6 @@ public class C680PanelStructureTests
     /// </summary>
     public static readonly string[] NotBuiltYet =
     {
-        "Pilot Touchscreen", "MFD Touchscreen", "Displays", "Circuit Breakers",
         "Doors and Service Panels", "Ground Equipment", "Payload and Fuel Load", "Water and Waste",
         "Crew Seat", "EFB Options"
     };

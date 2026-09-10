@@ -133,3 +133,15 @@ debugger (`tools/coherent-eval.ps1 -Title WTG3000_MFD -ExprFile …` with
 | Control lock | `L:SW_SOV_CONTROL_LOCK` 1 at the gate (CAS "CONTROL LOCK ON"). | |
 | Anti-skid | `CIRCUIT ON:126` 1. | |
 | Passenger briefing | `L:Takeoff_English` … `Landing_Spanish` (ten trigger L:vars) | not a selector; not exposed. |
+
+### Avionics and circuit breakers (2026-09-10)
+
+| Control | Variable | Measured / source |
+|---|---|---|
+| Radios | `COM ACTIVE/STANDBY FREQUENCY:n` (124.850), `NAV ACTIVE FREQUENCY:n` (110.50), `ADF ACTIVE FREQUENCY:1` (890 kHz) | stock; the COM standby set and swap were proven in the assessment. ADF set not exposed: the `ADF_COMPLETE_SET` BCD layout is unverified. |
+| Squawk | `TRANSPONDER CODE:1` BCO16 (25669 = 0x6445 = squawk 6445) ← `XPNDR_SET` with the code as hex digits | proven in the assessment (1200). |
+| Transponder mode | `TRANSPONDER STATE:1` 4 = Alt | ⚠️ `1 (>K:XPNDR_STATE_SET)` left it at 4 — not settable by event on this avionics; the GTC transponder page sets it. Readout only. |
+| Baro | `KOHLSMAN SETTING MB:1/2/3` 1013.25 ← `2 16320 (>K:2:KOHLSMAN_SET)` | index 2 went to 1020.0 with index 1 untouched, restored with 16212. RPN order for a two-parameter K event: INDEX first, VALUE last (the last pushed is the event's value), the same order the model uses for `3 1 (>K:2:APU_GENERATOR_SWITCH_SET)`. |
+| Circuit breakers | `L:CB_<name>` + `'<line>'_n (>K:ELECTRICAL_LINE_BREAKER_TOGGLE)` | 111 breakers generated from `SOV_Circuit_Breakers.xml` by `tools/c680-gen/gen-breakers.js` (`CB_J` has no line and is skipped). `CB_FLIGHT_HOUR_METER` pulled with the model's own click code: L:var 0 → 1, pushed back. |
+| Display reversion | `L:INSTRUMENT_Push_DisplayReverse_1/2` | pulses (the model's push buttons). `L:SW_SOV_CONFIG_Baro_Sync` is the EFB's baro-sync setting. |
+| FMS rows | `GPS WP DISTANCE`, `GPS WP ETE`, `GPS ETE`, `GPS FLIGHT PLAN TOTAL DISTANCE`, `GPS IS ACTIVE FLIGHT PLAN` | stock. `GPS WP NEXT ID` is a string SimVar the app cannot register — the touchscreen window reads the ident. |

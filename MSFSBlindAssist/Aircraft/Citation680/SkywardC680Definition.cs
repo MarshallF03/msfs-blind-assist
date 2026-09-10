@@ -83,6 +83,10 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         controls[FlightControlsPanel] = new(FlightControlsControls);
         controls[YokePanel] = new(YokeControls);
         controls[SignsPanel] = new(SignsControls);
+        controls[PilotGtcPanel] = new(PilotGtcControls);
+        controls[MfdGtcPanel] = new(MfdGtcControls);
+        controls[DisplaysPanel] = new(DisplaysControls);
+        controls[BreakersPanel] = new(BreakersControls);
         return controls;
     }
 
@@ -94,6 +98,8 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         Add(BuildRightTiltVariables());
         Add(BuildGlareshieldVariables());
         Add(BuildPedestalVariables());
+        Add(BuildAvionicsVariables());
+        Add(BuildBreakerVariables());
         return vars;
     }
 
@@ -116,7 +122,9 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         [FlapsPanel] = new(FlapsDisplay),
         [GearPanel] = new(GearDisplay),
         [FlightControlsPanel] = new(FlightControlsDisplay),
-        [YokePanel] = new(YokeDisplay)
+        [YokePanel] = new(YokeDisplay),
+        [PilotGtcPanel] = new(PilotGtcDisplay),
+        [MfdGtcPanel] = new(MfdGtcDisplay)
     };
     public override Dictionary<string, string> GetButtonStateMapping() => new();
 
@@ -148,6 +156,8 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         if (HandleRightTiltSet(varKey, value, simConnect)) return true;
         if (HandleGlareshieldSet(varKey, value, simConnect)) return true;
         if (HandlePedestalSet(varKey, value, simConnect, announcer)) return true;
+        if (HandleAvionicsSet(varKey, value, simConnect)) return true;
+        if (HandleBreakerSet(varKey, value, simConnect)) return true;
         return base.HandleUIVariableSet(varKey, value, varDef, simConnect, announcer);
     }
 
@@ -173,6 +183,7 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         {
             case "C680_SAI_LIMITS": displayText = "Low 100 knots, Vne 305, Mmo 0.80, altitude max 47000"; return true;
         }
+        if (TryAvionicsDisplay(varKey, value, out displayText)) return true;
         return base.TryGetDisplayOverride(varKey, value, out displayText);
     }
 
