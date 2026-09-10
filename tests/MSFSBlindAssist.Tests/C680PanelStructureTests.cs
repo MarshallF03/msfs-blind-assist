@@ -51,7 +51,6 @@ public class C680PanelStructureTests
     public static readonly string[] NotBuiltYet =
     {
         "Autopilot and Flight Director", "Warning and Fire", "Standby Instrument",
-        "Pressurization and Bleed", "Cabin Environment", "Hydraulics", "Fuel", "Oxygen and Emergency",
         "Thrust and Autothrottle", "Flaps Speedbrakes and Trim", "Gear and Brakes", "Flight Controls", "Yoke", "Passenger Signs and Cabin",
         "Pilot Touchscreen", "MFD Touchscreen", "Displays", "Circuit Breakers",
         "Doors and Service Panels", "Ground Equipment", "Payload and Fuel Load", "Water and Waste",

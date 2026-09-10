@@ -69,6 +69,11 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         controls[AntiIcePanel] = new(AntiIceControls);
         controls[ExteriorLightsPanel] = new(ExteriorLightsControls);
         controls[InteriorLightingPanel] = new(InteriorLightingControls);
+        controls[PressPanel] = new(PressControls);
+        controls[EnvironmentPanel] = new(EnvironmentControls);
+        controls[HydraulicsPanel] = new(HydraulicsControls);
+        controls[FuelPanel] = new(FuelControls);
+        controls[OxygenPanel] = new(OxygenControls);
         return controls;
     }
 
@@ -77,6 +82,7 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         var vars = new Dictionary<string, SimVarDefinition>();
         void Add(Dictionary<string, SimVarDefinition> more) { foreach (var kv in more) vars[kv.Key] = kv.Value; }
         Add(BuildLeftTiltVariables());
+        Add(BuildRightTiltVariables());
         return vars;
     }
 
@@ -86,7 +92,12 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         [ApuPanel] = new(ApuDisplay),
         [StartPanel] = new(StartDisplay),
         [AntiIcePanel] = new(AntiIceDisplay),
-        [ExteriorLightsPanel] = new(ExteriorLightsDisplay)
+        [ExteriorLightsPanel] = new(ExteriorLightsDisplay),
+        [PressPanel] = new(PressDisplay),
+        [EnvironmentPanel] = new(EnvironmentDisplay),
+        [HydraulicsPanel] = new(HydraulicsDisplay),
+        [FuelPanel] = new(FuelDisplay),
+        [OxygenPanel] = new(OxygenDisplay)
     };
     public override Dictionary<string, string> GetButtonStateMapping() => new();
 
@@ -115,6 +126,7 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
     {
         if (HandleLeftTiltSet(varKey, value, simConnect)) return true;
+        if (HandleRightTiltSet(varKey, value, simConnect)) return true;
         return base.HandleUIVariableSet(varKey, value, varDef, simConnect, announcer);
     }
 
