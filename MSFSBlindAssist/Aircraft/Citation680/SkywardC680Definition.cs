@@ -77,6 +77,12 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         controls[AutopilotPanel] = new(AutopilotControls);
         controls[WarningPanel] = new(WarningControls);
         controls[StandbyPanel] = new(StandbyControls);
+        controls[ThrustPanel] = new(ThrustControls);
+        controls[FlapsPanel] = new(FlapsControls);
+        controls[GearPanel] = new(GearControls);
+        controls[FlightControlsPanel] = new(FlightControlsControls);
+        controls[YokePanel] = new(YokeControls);
+        controls[SignsPanel] = new(SignsControls);
         return controls;
     }
 
@@ -87,6 +93,7 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         Add(BuildLeftTiltVariables());
         Add(BuildRightTiltVariables());
         Add(BuildGlareshieldVariables());
+        Add(BuildPedestalVariables());
         return vars;
     }
 
@@ -104,7 +111,12 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         [OxygenPanel] = new(OxygenDisplay),
         [AutopilotPanel] = new(AutopilotDisplay),
         [WarningPanel] = new(WarningDisplay),
-        [StandbyPanel] = new(StandbyDisplay)
+        [StandbyPanel] = new(StandbyDisplay),
+        [ThrustPanel] = new(ThrustDisplay),
+        [FlapsPanel] = new(FlapsDisplay),
+        [GearPanel] = new(GearDisplay),
+        [FlightControlsPanel] = new(FlightControlsDisplay),
+        [YokePanel] = new(YokeDisplay)
     };
     public override Dictionary<string, string> GetButtonStateMapping() => new();
 
@@ -135,6 +147,7 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         if (HandleLeftTiltSet(varKey, value, simConnect)) return true;
         if (HandleRightTiltSet(varKey, value, simConnect)) return true;
         if (HandleGlareshieldSet(varKey, value, simConnect)) return true;
+        if (HandlePedestalSet(varKey, value, simConnect, announcer)) return true;
         return base.HandleUIVariableSet(varKey, value, varDef, simConnect, announcer);
     }
 

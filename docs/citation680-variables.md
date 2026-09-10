@@ -118,3 +118,18 @@ debugger (`tools/coherent-eval.ps1 -Title WTG3000_MFD -ExprFile …` with
 | MASTER WARNING / CAUTION | `MASTER WARNING ACTIVE`, `MASTER CAUTION ACTIVE` (+ `… ACKNOWLEDGED`) ← `K:MASTER_WARNING_ACKNOWLEDGE` / `K:MASTER_CAUTION_ACKNOWLEDGE` | the model's own push templates; the `XMLVAR_WARNING_n` names in the model are its O: animation vars, not L:vars. All 0 with no fault present. |
 | Fire covers | `L:SAFETY_Push_Extinguisher_1_Cover` | 0 → 1 → 0. |
 | Standby QNH unit | `L:SW_SOV_GH3900_QNH` | 0 → 1 → 0; `KOHLSMAN SETTING MB:3` 1013.25. `SW_SOV_GH3900_BL` 0.8 at load. |
+
+### Pedestal (2026-09-10, engines running at the gate — nothing that moves a flight control, brake or the gear was written, by the owner's rule)
+
+| Control | Variable | Measured / source |
+|---|---|---|
+| SEAT BELTS, PAX SAFETY | `L:SW_SOV_PASSENGER_SEAT_BELT` (1 at load), `L:SW_SOV_PASSENGER_SAFETY_PUSH` | 1 → 0 → 1 and 0 → 1 → 0 written and read back. The stock `CABIN SEATBELTS ALERT SWITCH` stays 0 throughout: not mirrored. |
+| Cabin overhead lights | `L:SW_SOV_LIGHT_OVERHEAD`, `_BRT` 0.8 | 0 → 1 lit `LIGHT CABIN` 1; restored. `PAX_MUSIC_VOL` 80. |
+| Speedbrake lever | `L:SW_SOV_HANDLING_SPOILER_LEVER` percent | the model's click code steps this L:var in 2 percent steps and the plugin drives the spoilers from it (0.75 factor); `SPOILERS HANDLE POSITION` is the downstream read. 0 at rest. |
+| Park brake | `L:SW_SOV_PARKING_BRAKE` (1) → `BRAKE PARKING POSITION` (1) | the click code toggles the L:var; not exercised. |
+| Gear lever | `L:SW_SOV_LANDING_GEAR_LEVER` 1 = down | the click code toggles it under the model's own conditions; MSFSBA refuses Up while `SIM ON GROUND`. `SW_SOV_HANDLING_GEAR_LOCKED:1..3` 1, `GEAR_POWER_ON` 1. |
+| Flaps | stock `FLAPS HANDLE INDEX` 0..3 (`FLAPS NUM HANDLE POSITIONS` 3) ← `FLAPS_UP/1/2/DOWN` | the stock `ASOBO_HANDLING_Lever_Flaps_Template`; not exercised. |
+| Control disconnect handle | `L:SW_SOV_CSF_Disconnect` 0..3 | `ASOBO_GT_Switch_4States`; the axis flags are `Skyward_Ailerons_Disconnected`, `Skyward_Elevator_L/R_Disconnected`. |
+| Control lock | `L:SW_SOV_CONTROL_LOCK` 1 at the gate (CAS "CONTROL LOCK ON"). | |
+| Anti-skid | `CIRCUIT ON:126` 1. | |
+| Passenger briefing | `L:Takeoff_English` … `Landing_Spanish` (ten trigger L:vars) | not a selector; not exposed. |
