@@ -175,3 +175,11 @@ debugger (`tools/coherent-eval.ps1 -Title WTG3000_MFD -ExprFile …` with
 | CAS rows | `.full-cas-display-2-list .cas-display-2-msg`; live rows carry `cas-display-2-msg-visible` and `-warning` / `-caution` / `-advisory`; a fresh caution also `-new` (colour rgb(10,10,0) mid-flash) and an acknowledged one `-acked`; empty slots are `display:none`. Seen with engines running: FUEL IMBALANCE and PARK BRAKE LOW PRESS (cautions), PARK BRAKE ON, APU BLD VALVE CLOSED, NO TAKEOFF, CONTROL LOCK ON, P/S COLD L-R-STBY (advisories). |
 | Engine strip | `.engine-gauges`: `.arc-gauge.n1-gauge` / `.itt-gauge` (one per engine) with `.arc-gauge-digital-readout`, titles as free `.gauge-title` ("N1%", "ITT°C"); secondary rows `.sec-eng-data-row` with `.sec-eng-data-title` / `-value` (N2%, FUEL PPH, OIL PSI, OIL°C); system groups `*-section` each with an `.eis-title-text` (TRIM, FUEL QTY, FLAPS, GEAR, APU, HYDRAULICS, ELECTRICAL), read as visible leaves in reading order. |
 | One socket | The PFD 1 CAS monitor and the MFD reader each own their view's single inspector socket; the definition holds the MFD client so the engine strip and the synoptic reader share it. |
+
+### MFD panes and synoptics (2026-09-10)
+
+| Fact | Measured |
+|---|---|
+| Panes | `.display-pane.display-pane-left` / `-right` (`display-pane-half` when split), title `.display-pane-title-text` ("Navigation Map", "Traffic Map", "Electrical"), content `.display-pane-content`. GTC 2 drives the left half, GTC 3 the right. |
+| Synoptic pages | The MFD touchscreen's Aircraft Systems page: Summary, Hydraulics, Fuel, Electrical, Systems Test, Cabin Management, Exterior Lights, Temp, Propulsion, Cabin Pressure (Maintenance disabled); Checklist and Services sit on MFD Home. |
+| Electrical pane text | read in reading order: "L AVN / L INT / R INT / R AVN", "L ELEC / R ELEC", "28 V L WSHLD R WSHLD 28 V", "45 A 55 A", "L GEN R GEN L AC R AC", "L TRU R TRU", "BUS TIE CLSD", "29 V L BATT R BATT", "EXT PWR", "APU GEN 21 21 °C" — the synoptic's own words, as the Alt+S window lists them. |

@@ -228,6 +228,7 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
     {
         if (HandleC680Hotkey(action, simConnect, announcer, parentForm, hotkeyManager)) return true;
         if (HandleCasHotkey(action, announcer, hotkeyManager)) return true;
+        if (HandleSynopticHotkey(action, announcer, hotkeyManager)) return true;
         if (action == HotkeyAction.MonitorManager)
         {
             (parentForm as MainForm)?.ShowC680MonitorManagerDialog();

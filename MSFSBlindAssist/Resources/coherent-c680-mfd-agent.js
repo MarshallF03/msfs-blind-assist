@@ -70,6 +70,31 @@
     } catch (e) { return JSON.stringify({ ok: false, error: String(e), rows: [] }); }
   };
   A.scrape = A.eis;
+  // One MFD half: its title bar text, then the pane's content as reading-order lines. The left
+  // pane is the pilot's (GTC 2 drives it), the right the copilot's (GTC 3). Measured 2026-09-10:
+  // .display-pane.display-pane-left / -right, .display-pane-title-text, .display-pane-content.
+  A.pane = function (side) {
+    try {
+      var pane = document.querySelector(".display-pane.display-pane-" + (side === "right" ? "right" : "left"));
+      if (!pane) return JSON.stringify({ ok: false, error: "no " + side + " pane", rows: [] });
+      var title = pane.querySelector(".display-pane-title-text"); var content = pane.querySelector(".display-pane-content") || pane;
+      var rows = ["Pane: " + (title ? txt(title) : "")];
+      var items = []; var els = content.querySelectorAll("*");
+      for (var i = 0; i < els.length; i++) {
+        var e = els[i]; if (e.children.length || !visible(e)) continue;
+        var t = txt(e); if (!t) continue;
+        var r = e.getBoundingClientRect(); items.push({ t: t, x: Math.round(r.left), y: Math.round(r.top + r.height / 2) });
+      }
+      items.sort(function (a, b) { return (Math.round(a.y / 10) - Math.round(b.y / 10)) || (a.x - b.x); });
+      var cur = null; var cy = -999;
+      for (var j = 0; j < items.length; j++) {
+        if (Math.abs(items[j].y - cy) > 10) { if (cur !== null) rows.push(cur); cur = items[j].t; cy = items[j].y; }
+        else cur += " | " + items[j].t;
+      }
+      if (cur !== null) rows.push(cur);
+      return JSON.stringify({ ok: true, rows: rows });
+    } catch (e) { return JSON.stringify({ ok: false, error: String(e), rows: [] }); }
+  };
   window.__MSFSBA_C680_EIS = A; window.__MSFSBA_DISP = A;
   return "MSFSBA_DISP_INSTALLED";
 })();
