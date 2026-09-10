@@ -148,6 +148,9 @@
     <None Update="HotkeyGuides\HS787_Hotkeys.txt">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="HotkeyGuides\Skyward_C680_Hotkeys.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Update="HotkeyGuides\iFly_737MAX8_Hotkeys.txt">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

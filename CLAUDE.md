@@ -856,6 +856,7 @@ Details: [docs/a32nx.md](docs/a32nx.md).
 - **Working on the FlyByWire A32NX or Fenix A320 (panel parity, MCDU, DCDU, cockpit controls, monitor manager)** → [FlyByWire A32NX / Fenix](docs/a32nx.md)
 - **Working on the shared flyPad EFB (A320 + A380 ground services, settings, dashboard reading order)** → [flyPad EFB](docs/flypad.md)
 - **Working on the HorizonSim 787-9 (CDU/IRS/EICAS over the Coherent debugger)** → [HorizonSim 787](docs/hs787.md)
+- **Working on the Skyward Citation Sovereign+ (C680: vendor L:vars, G5000 touchscreens, CAS, EFB over the Coherent debugger)** → [Citation Sovereign+](docs/citation680.md)
 - **A control "doesn't work" and you're about to declare it broken, computed-output, or unsettable** → [Troubleshooting Playbook](docs/troubleshooting-playbook.md) (read this FIRST — most "broken" verdicts turn out wrong)
 - **Working on Gemini AI display reading, scene description, or route briefing** → [Gemini AI](docs/gemini.md)
 - **Understanding variable patterns** → [Variable System](docs/variable-system.md)
@@ -883,6 +884,7 @@ Details: [docs/a32nx.md](docs/a32nx.md).
 - **[FlyByWire A32NX / Fenix](docs/a32nx.md)** - A32NX panel parity, MCDU, DCDU, Fenix cockpit controls, Fenix monitor manager, momentary-button press-release fix
 - **[flyPad EFB](docs/flypad.md)** - Shared FlyByWire A320/A380 flyPad accessibility architecture (WebView2 shell, ground services, settings, dashboard)
 - **[HorizonSim 787](docs/hs787.md)** - 787-9 CDU/IRS/EICAS over the Coherent debugger, community-folder-bridge retirement
+- **[Citation Sovereign+](docs/citation680.md)** - Skyward C680: vendor L:var transports, the four G5000 touchscreens as windows, CAS monitor, synoptic reader, vendor EFB; measured variables in [citation680-variables.md](docs/citation680-variables.md)
 - **[Troubleshooting Playbook](docs/troubleshooting-playbook.md)** - Universal variable/control troubleshooting method — read before declaring any control "broken"
 - **[Gemini AI](docs/gemini.md)** - Model selection, retry/backoff, and API-parameter gotchas for the AI display-reading and route-briefing features
 - **[Aircraft Definitions](docs/aircraft-definitions.md)** - Multi-aircraft dictionary system API reference

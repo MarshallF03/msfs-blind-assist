@@ -56,6 +56,9 @@ public class HotkeyManager : IDisposable
         private const int HOTKEY_SHOW_RMP = 9242;         // Ctrl+Shift+R (A380 Radio Management Panel) — input mode
         private const int HOTKEY_C680_OTHER_MFD_GTC = 9270; // Ctrl+Shift+M (Citation Sovereign+: the other seat's MFD touchscreen) — input mode
         private const int HOTKEY_C680_OTHER_PFD_GTC = 9271; // Alt+Shift+R (Citation Sovereign+: the other seat's PFD touchscreen) — input mode
+        private const int HOTKEY_ENGINE_RPM = 9272;         // P (engine RPM readout: N1 and N2) — output mode
+        private const int HOTKEY_ENGINE_POWER = 9273;       // E (engine power readout: N1, fuel flow, levers) — output mode
+        private const int HOTKEY_ENGINE_TEMPS = 9274;       // Shift+O (engine temperatures: ITT, oil) — output mode
         private const int HOTKEY_SHOW_DCDU = 9251;        // Ctrl+Shift+D (A32NX DCDU / CPDLC window) — input mode
         private const int HOTKEY_VATSIM_MUTE = 9252;      // Alt+V (Toggle VATSIM announcements) — output mode
         private const int HOTKEY_ND_WAYPOINT = 9243;      // Ctrl+W (FBW ND TO-waypoint: name/distance/bearing) — output mode
@@ -397,6 +400,15 @@ public class HotkeyManager : IDisposable
                             break;
                         case HOTKEY_FLAPS:
                             TriggerHotkey(HotkeyAction.ReadFlaps);
+                            break;
+                        case HOTKEY_ENGINE_RPM:
+                            TriggerHotkey(HotkeyAction.ReadEngineRpm);
+                            break;
+                        case HOTKEY_ENGINE_POWER:
+                            TriggerHotkey(HotkeyAction.ReadEnginePower);
+                            break;
+                        case HOTKEY_ENGINE_TEMPS:
+                            TriggerHotkey(HotkeyAction.ReadEngineTemps);
                             break;
                         case HOTKEY_GEAR:
                             TriggerHotkey(HotkeyAction.ReadGear);
@@ -747,6 +759,9 @@ public class HotkeyManager : IDisposable
             RegisterHotKey(windowHandle, HOTKEY_CHECKLIST_ECL, MOD_CONTROL | MOD_SHIFT, 0x43); // Ctrl+Shift+C (A380 live ECL)
             RegisterHotKey(windowHandle, HOTKEY_FUEL_QUANTITY, MOD_NONE, 0x46);  // F (Fuel Quantity)
             RegisterHotKey(windowHandle, HOTKEY_FLAPS, MOD_NONE, 0x4C);          // L (Flaps)
+            RegisterHotKey(windowHandle, HOTKEY_ENGINE_RPM, MOD_NONE, 0x50);     // P (Engine RPM: N1 and N2)
+            RegisterHotKey(windowHandle, HOTKEY_ENGINE_POWER, MOD_NONE, 0x45);   // E (Engine power: N1, fuel flow, levers)
+            RegisterHotKey(windowHandle, HOTKEY_ENGINE_TEMPS, MOD_SHIFT, 0x4F);  // Shift+O (Engine temperatures)
             RegisterHotKey(windowHandle, HOTKEY_GEAR, MOD_SHIFT, 0x47);          // Shift+G (Gear)
             RegisterHotKey(windowHandle, HOTKEY_ALTIMETER, MOD_NONE, 0x42);      // B (Altimeter)
             RegisterHotKey(windowHandle, HOTKEY_GROSS_WEIGHT_KG, MOD_SHIFT, 0x57); // Shift+W (Gross Weight KG)
@@ -859,6 +874,9 @@ public class HotkeyManager : IDisposable
             UnregisterHotKey(windowHandle, HOTKEY_CHECKLIST_ECL);
             UnregisterHotKey(windowHandle, HOTKEY_FUEL_QUANTITY);
             UnregisterHotKey(windowHandle, HOTKEY_FLAPS);
+            UnregisterHotKey(windowHandle, HOTKEY_ENGINE_RPM);
+            UnregisterHotKey(windowHandle, HOTKEY_ENGINE_POWER);
+            UnregisterHotKey(windowHandle, HOTKEY_ENGINE_TEMPS);
             UnregisterHotKey(windowHandle, HOTKEY_GEAR);
             UnregisterHotKey(windowHandle, HOTKEY_ALTIMETER);
             UnregisterHotKey(windowHandle, HOTKEY_GROSS_WEIGHT_KG);
@@ -1325,6 +1343,9 @@ public class HotkeyManager : IDisposable
         ShowChecklistECL,
         ReadFuelQuantity,
         ReadFlaps,
+        ReadEngineRpm,
+        ReadEnginePower,
+        ReadEngineTemps,
         ReadGear,
         ReadAltimeter,
         FCUSetBaro,
