@@ -25,6 +25,23 @@
     e.dispatchEvent(ev("mousedown")); e.dispatchEvent(ev("mouseup")); e.dispatchEvent(ev("click"));
   }
   function page() { return document.querySelector("#page-container .page.active") || document.querySelector(".page.active") || document.body; }
+  // A keypad / keyboard popup ("Set SimBrief User ID": digits, Clear, Cancel, Set ID) sits OUTSIDE
+  // the page container; while one is up it is what the pilot must see and press.
+  function overlay() {
+    var ovs = document.querySelectorAll(".payload-keyboard-overlay, .keyboard-overlay, [class*='keyboard-popup'], [class*='-overlay'], [class*='modal']");
+    for (var i = 0; i < ovs.length; i++) if (visible(ovs[i]) && txt(ovs[i])) return ovs[i];
+    return null;
+  }
+  // Buttons here are mostly styled DIVs: anything whose class names a button/btn, plus real <button>s.
+  var BTN_CLASS = /(^|\s)([a-z0-9]+-)*(btn|button)(-[a-z0-9-]+)?(\s|$)/i;
+  function isButton(e) {
+    if (e.tagName === "BUTTON") return true;
+    if (e.getAttribute && e.getAttribute("role") === "button") return true;
+    var c = String(e.className);
+    if (!BTN_CLASS.test(c)) return false;
+    if (/selector-btn|menu-item|sub-nav/.test(c)) return false;   // selector choices and nav are handled elsewhere
+    return true;
+  }
   function inside(e, sel) { var p = e; while (p && p !== document) { if (p.matches && p.matches(sel)) return p; p = p.parentNode; } return null; }
 
   A.pages = function () {
@@ -50,8 +67,26 @@
 
   // The active page as rows. Cards and settings rows render as "Label: on/off" or
   // "Label: A / B* / C" and are actionable; buttons as "[Label]"; the rest is text in reading order.
+  // A popup as rows: its header, its display value, then its buttons in reading order.
+  function scrapeOverlay(ov) {
+    var rows = []; var acts = [null];
+    var head = ov.querySelector("[class*='header'], [class*='title']"); rows.push("Popup: " + (head ? txt(head) : txt(ov).slice(0, 40)));
+    var disp = ov.querySelector("[class*='display']"); if (disp) { rows.push("Entry: " + (txt(disp) || "(empty)")); acts.push(null); }
+    var items = []; var els = ov.querySelectorAll("*");
+    for (var i = 0; i < els.length; i++) {
+      var e = els[i]; if (!visible(e) || !isButton(e)) continue;
+      if (e.querySelector && Array.prototype.some.call(e.querySelectorAll("*"), isButton)) continue;
+      var t = txt(e); if (!t) continue;
+      var r = e.getBoundingClientRect(); items.push({ t: "[" + t + "]", x: Math.round(r.left), y: Math.round(r.top + r.height / 2), act: { el: e, kind: "button" } });
+    }
+    items.sort(function (a, b) { return (Math.round(a.y / 16) - Math.round(b.y / 16)) || (a.x - b.x); });
+    for (var j = 0; j < items.length; j++) { rows.push(items[j].t); acts.push(items[j].act); }
+    A._acts = acts;
+    return JSON.stringify({ ok: true, rows: rows });
+  }
   A.scrape = function () {
     try {
+      var ov = overlay(); if (ov) return scrapeOverlay(ov);
       var p = page(); var rows = []; var acts = []; var owned = [];
       var pageName = ""; var mi = document.querySelectorAll("#menu-bar .menu-item.active"); if (mi.length) pageName = txt(mi[0]);
       var tab = ""; var sn = p.querySelectorAll(".sub-nav-item"); for (var s = 0; s < sn.length; s++) if (hasClass(sn[s], "active")) tab = txt(sn[s]);
@@ -62,7 +97,18 @@
         var cb = card.querySelector("input[type=checkbox]");
         var title = card.querySelector(".ground-service-title, .card-title, h3, h4"); var name = title ? txt(title) : txt(card).slice(0, 40);
         if (cb) { acts.push({ el: cb, kind: "checkbox" }); rows.push(name + ": " + (cb.checked ? "on" : "off")); }
-        else rows.push(name);
+        else {
+          // The Settings tabs reuse the card markup for account and key cards: the title, then each
+          // of the card's buttons ("*" opens the SimBrief ID keypad, "Log In / Go to Charts", "Insert Key here").
+          acts.push(null); rows.push(name);
+          var cbs = card.querySelectorAll("*");
+          for (var q = 0; q < cbs.length; q++) {
+            var be = cbs[q]; if (!visible(be) || !isButton(be)) continue;
+            if (Array.prototype.some.call(be.querySelectorAll("*"), isButton)) continue;
+            var bl = txt(be); if (!bl) continue;
+            acts.push({ el: be, kind: "button" }); rows.push("[" + bl + "]");
+          }
+        }
       }
       var srows = p.querySelectorAll(".settings-option-row");
       for (var r = 0; r < srows.length; r++) {
@@ -85,10 +131,14 @@
         var skip = false; for (var o = 0; o < owned.length; o++) if (owned[o] === e || owned[o].contains(e)) { skip = true; break; }
         if (skip) continue;
         if (inside(e, ".sub-nav-item") || inside(e, "#menu-bar")) continue;
-        var isBtn = e.tagName === "BUTTON" || hasClass(e, "btn") || (e.getAttribute && e.getAttribute("role") === "button");
-        if (isBtn) { var bt = txt(e); if (!bt) continue; var rect = e.getBoundingClientRect(); items.push({ t: "[" + bt + "]", x: Math.round(rect.left), y: Math.round(rect.top + rect.height / 2), act: { el: e, kind: "button" } }); continue; }
+        if (isButton(e)) {
+          if (Array.prototype.some.call(e.querySelectorAll("*"), isButton)) continue;   // keep the innermost button
+          var bt = txt(e); if (!bt) continue; var rect = e.getBoundingClientRect();
+          items.push({ t: "[" + bt + "]", x: Math.round(rect.left), y: Math.round(rect.top + rect.height / 2), act: { el: e, kind: "button" } }); continue;
+        }
         if (e.children.length) continue;
-        if (inside(e, "button")) continue;
+        var pb = e.parentNode, insideBtn = false; while (pb && pb !== document) { if (pb.nodeType === 1 && isButton(pb)) { insideBtn = true; break; } pb = pb.parentNode; }
+        if (insideBtn) continue;
         var lt = e.tagName === "INPUT" ? (e.type === "checkbox" ? (e.checked ? "on" : "off") : "input " + (e.value || "")) : txt(e);
         if (!lt) continue;
         var r2 = e.getBoundingClientRect(); items.push({ t: lt, x: Math.round(r2.left), y: Math.round(r2.top + r2.height / 2), act: e.tagName === "INPUT" && e.type === "checkbox" ? { el: e, kind: "checkbox" } : null });
@@ -112,11 +162,13 @@
     if (a.kind === "checkbox" || a.kind === "selector") { try { a.el.click(); } catch (x) { clickEl(a.el); } return "ok"; }
     clickEl(a.el); return "ok";
   };
+  // Press a button by its label — inside the popup while one is up (so typed digits reach the keypad), else on the page.
   A.press = function (label) {
-    var p = page(); var bs = p.querySelectorAll("button, .btn, [role=button]");
-    for (var i = 0; i < bs.length; i++) if (visible(bs[i]) && txt(bs[i]) === label) { clickEl(bs[i]); return "ok"; }
+    var root = overlay() || page(); var bs = root.querySelectorAll("*");
+    for (var i = 0; i < bs.length; i++) if (visible(bs[i]) && isButton(bs[i]) && txt(bs[i]) === label) { clickEl(bs[i]); return "ok"; }
     return "none";
   };
+  A.hasPopup = function () { return overlay() ? "yes" : "no"; };
   window.__MSFSBA_C680_EFB = A; window.__MSFSBA_DISP = A;
   return "MSFSBA_DISP_INSTALLED";
 })();

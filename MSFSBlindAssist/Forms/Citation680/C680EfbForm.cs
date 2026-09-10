@@ -65,6 +65,23 @@ public sealed class C680EfbForm : Form
         {
             if (e.KeyCode == Keys.Escape) { e.Handled = true; Close(); return; }
             if (e.KeyCode == Keys.F5) { e.Handled = true; Apply(await _client.ScrapeNowAsync()); await SyncNavAsync(); return; }
+            // A keypad or keyboard popup ("Set SimBrief User ID"): typed digits and letters press its keys,
+            // Backspace its Clear. The popup's own Cancel and Set/OK rows take Enter like any button.
+            bool popup = _list.Items.Count > 0 && (_list.Items[0]?.ToString() ?? "").StartsWith("Popup:", StringComparison.Ordinal);
+            if (popup && _list.Focused && e.Modifiers == Keys.None)
+            {
+                string? key = null;
+                if (e.KeyCode >= Keys.D0 && e.KeyCode <= Keys.D9) key = ((char)('0' + (e.KeyCode - Keys.D0))).ToString();
+                else if (e.KeyCode >= Keys.NumPad0 && e.KeyCode <= Keys.NumPad9) key = ((char)('0' + (e.KeyCode - Keys.NumPad0))).ToString();
+                else if (e.KeyCode >= Keys.A && e.KeyCode <= Keys.Z) key = ((char)('A' + (e.KeyCode - Keys.A))).ToString();
+                else if (e.KeyCode == Keys.Back) key = "Clear";
+                if (key != null)
+                {
+                    e.Handled = true; e.SuppressKeyPress = true;
+                    await Act($"__MSFSBA_C680_EFB.press({Js(key)})", key, speakRow: 1);
+                    return;
+                }
+            }
             if (e.KeyCode == Keys.Enter && _list.Focused && _list.SelectedIndex > 0)
             {
                 e.Handled = true; e.SuppressKeyPress = true;
