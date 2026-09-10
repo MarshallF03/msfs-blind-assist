@@ -167,3 +167,11 @@ debugger (`tools/coherent-eval.ps1 -Title WTG3000_MFD -ExprFile …` with
 | Press | mousedown / mouseup / click at the button centre: `press("Speed Bugs")` → title Speed Bugs, `press("Home")` → PFD Home, both through the agent. |
 | Knobs | `H:AS3000_TSC_Vertical_<n>_<Name>` from inside the view (n from the view title); the 2026-09-09 assessment stepped COM1 standby 122.50 → 122.525. |
 | Units | GTC 1 pilot PFD, 2 left MFD, 3 right MFD, 4 copilot PFD (`C680Seat.GtcIndexFor`). One inspector socket per view: the window owns its client and disposes it on close. |
+
+### CAS monitor and engine strip (2026-09-10, `Resources/coherent-c680-cas-agent.js`, `coherent-c680-mfd-agent.js`)
+
+| Fact | Measured |
+|---|---|
+| CAS rows | `.full-cas-display-2-list .cas-display-2-msg`; live rows carry `cas-display-2-msg-visible` and `-warning` / `-caution` / `-advisory`; a fresh caution also `-new` (colour rgb(10,10,0) mid-flash) and an acknowledged one `-acked`; empty slots are `display:none`. Seen with engines running: FUEL IMBALANCE and PARK BRAKE LOW PRESS (cautions), PARK BRAKE ON, APU BLD VALVE CLOSED, NO TAKEOFF, CONTROL LOCK ON, P/S COLD L-R-STBY (advisories). |
+| Engine strip | `.engine-gauges`: `.arc-gauge.n1-gauge` / `.itt-gauge` (one per engine) with `.arc-gauge-digital-readout`, titles as free `.gauge-title` ("N1%", "ITT°C"); secondary rows `.sec-eng-data-row` with `.sec-eng-data-title` / `-value` (N2%, FUEL PPH, OIL PSI, OIL°C); system groups `*-section` each with an `.eis-title-text` (TRIM, FUEL QTY, FLAPS, GEAR, APU, HYDRAULICS, ELECTRICAL), read as visible leaves in reading order. |
+| One socket | The PFD 1 CAS monitor and the MFD reader each own their view's single inspector socket; the definition holds the MFD client so the engine strip and the synoptic reader share it. |

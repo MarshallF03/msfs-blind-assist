@@ -108,6 +108,7 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         Add(BuildBreakerVariables());
         Add(BuildCabinVariables());
         Add(BuildSimulationVariables());
+        Add(BuildCasVariables());
         return vars;
     }
 
@@ -213,6 +214,7 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
     public override bool ProcessSimVarUpdate(string varName, double value, ScreenReaderAnnouncer announcer)
     {
         _live[varName] = value;
+        if (IsCasPseudoVariable(varName)) return true;   // the Ctrl+M rows carry mutes only; the CAS monitor speaks
         if (IsSilentCachedReadout(varName)) return true;
         return base.ProcessSimVarUpdate(varName, value, announcer);
     }
@@ -225,6 +227,7 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
         ScreenReaderAnnouncer announcer, Form parentForm, HotkeyManager hotkeyManager)
     {
         if (HandleC680Hotkey(action, simConnect, announcer, parentForm, hotkeyManager)) return true;
+        if (HandleCasHotkey(action, announcer, hotkeyManager)) return true;
         if (action == HotkeyAction.MonitorManager)
         {
             (parentForm as MainForm)?.ShowC680MonitorManagerDialog();
@@ -248,6 +251,7 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
     /// <summary>Releases every window this definition opened; MainForm calls it on an aircraft switch.</summary>
     public void DisposeWindows()
     {
+        StopCasMonitor();
         foreach (var w in _windows.Values)
         {
             try { if (!w.IsDisposed) w.Close(); } catch { }

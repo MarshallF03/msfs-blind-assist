@@ -919,6 +919,13 @@ public partial class MainForm
         else
             DisposeHS787Forms();
 
+        // The Sovereign+ CAS monitor runs for as long as the aircraft is current (the definition
+        // owns it and its windows; DisposeWindows() on the OUTGOING definition tears them down).
+        if (oldAircraft is Aircraft.Citation680.SkywardC680Definition oldC680 && oldAircraft != newAircraft)
+            oldC680.DisposeWindows();
+        if (newAircraft is Aircraft.Citation680.SkywardC680Definition newC680)
+            newC680.StartCasMonitor(announcer);
+
         // The iFly def owns the shared-memory SDK client — stop its poll and close the
         // mapping so it doesn't keep firing events at the new aircraft.
         if (oldAircraft is IFly737MAXDefinition oldIFly && oldAircraft != newAircraft)
