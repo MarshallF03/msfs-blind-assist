@@ -22,6 +22,7 @@ public partial class SkywardC680Definition
             case HotkeyAction.ShowC680OtherPfdTouchscreen: hk.ExitInputHotkeyMode(); ShowGtc(isMfd: false, C680Seat.Other(CurrentSeat), ann); return true;
             case HotkeyAction.ShowChecklistECL: hk.ExitOutputHotkeyMode(); ShowGtc(isMfd: true, CurrentSeat, ann, openPage: "Checklist"); return true;
             case HotkeyAction.FCUSetAutopilot: hk.ExitInputHotkeyMode(); ShowAutopilotWindow(sc, ann); return true;
+            case HotkeyAction.ShowPMDGEFB: hk.ExitInputHotkeyMode(); ShowWindow("efb", () => new Forms.Citation680.C680EfbForm(ann)); return true;   // Shift+T: the vendor EFB
         }
         return false;
     }

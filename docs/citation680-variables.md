@@ -183,3 +183,13 @@ debugger (`tools/coherent-eval.ps1 -Title WTG3000_MFD -ExprFile …` with
 | Panes | `.display-pane.display-pane-left` / `-right` (`display-pane-half` when split), title `.display-pane-title-text` ("Navigation Map", "Traffic Map", "Electrical"), content `.display-pane-content`. GTC 2 drives the left half, GTC 3 the right. |
 | Synoptic pages | The MFD touchscreen's Aircraft Systems page: Summary, Hydraulics, Fuel, Electrical, Systems Test, Cabin Management, Exterior Lights, Temp, Propulsion, Cabin Pressure (Maintenance disabled); Checklist and Services sit on MFD Home. |
 | Electrical pane text | read in reading order: "L AVN / L INT / R INT / R AVN", "L ELEC / R ELEC", "28 V L WSHLD R WSHLD 28 V", "45 A 55 A", "L GEN R GEN L AC R AC", "L TRU R TRU", "BUS TIE CLSD", "29 V L BATT R BATT", "EXT PWR", "APU GEN 21 21 °C" — the synoptic's own words, as the Alt+S window lists them. |
+
+### Vendor EFB (2026-09-10, `Resources/coherent-c680-efb-agent.js`)
+
+| Fact | Measured |
+|---|---|
+| Pages | `#menu-bar .menu-item[data-page]`: home, ground (Services), flight, checklists, settings; the active page is `#page-container .page.active`. |
+| Tabs | `.sub-nav-item` (active one carries `active`): Services — Access, Ground, Payload, Electrical, Hydraulics, Vanity Service, O2 / N2; Flight — Flight Plan (OFP), Flight Plan Charts, Charts; Checklists — Normal (Short), Normal, Abnormal, Emergency; Settings — Configuration, Simulation, Audio, In Flight, 3rd Party Options. |
+| Services Ground | 13 `.ground-service-card`s, each with a checkbox: Antenna Covers, Engine Covers, Pitot Tube Covers, AOA Sensor Covers, Wheel Chocks, Ground Power Unit, Hydraulics Cart, Oxygen Cart, Lavatory Service Cart, Fuel Truck, VIP Vehicle, Red Carpet. |
+| Settings Configuration | `.settings-option-row` with `.settings-option-title` and a checkbox or `.settings-selector-btn` choices (active one `active`): WiFi System No WiFi / Ku-Band / Starlink, 2nd Oxygen Bottle, Auto Brightness, Weight / Liquid / Temperature Units, Registration Type, Display Style, Distance Unit, Temperature Unit, Backlight Mode, QNH Unit, Meter Overlay, Turn Indicator, Ground Speed Indicator, Test Kit, Calibration Kit. |
+| Acting | a card checkbox or selector button answers `.click()`; a page or tab needs the mousedown/mouseup/click triple. The window acts by ROW INDEX from its last scrape (`act(i)`), so a stale list is re-read before any press. |
