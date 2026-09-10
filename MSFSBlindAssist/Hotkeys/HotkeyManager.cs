@@ -54,6 +54,8 @@ public class HotkeyManager : IDisposable
         private const int HOTKEY_LANDING_RATE = 9240;     // Ctrl+Shift+R (last landing rate)  — output mode
         private const int HOTKEY_LANDING_PEAK_G = 9241;   // Ctrl+Shift+G (last landing g-force) — output mode
         private const int HOTKEY_SHOW_RMP = 9242;         // Ctrl+Shift+R (A380 Radio Management Panel) — input mode
+        private const int HOTKEY_C680_OTHER_MFD_GTC = 9270; // Ctrl+Shift+M (Citation Sovereign+: the other seat's MFD touchscreen) — input mode
+        private const int HOTKEY_C680_OTHER_PFD_GTC = 9271; // Alt+Shift+R (Citation Sovereign+: the other seat's PFD touchscreen) — input mode
         private const int HOTKEY_SHOW_DCDU = 9251;        // Ctrl+Shift+D (A32NX DCDU / CPDLC window) — input mode
         private const int HOTKEY_VATSIM_MUTE = 9252;      // Alt+V (Toggle VATSIM announcements) — output mode
         private const int HOTKEY_ND_WAYPOINT = 9243;      // Ctrl+W (FBW ND TO-waypoint: name/distance/bearing) — output mode
@@ -615,6 +617,12 @@ public class HotkeyManager : IDisposable
                         case HOTKEY_SHOW_RMP:
                             TriggerHotkey(HotkeyAction.ShowRMP);
                             break;
+                        case HOTKEY_C680_OTHER_MFD_GTC:
+                            TriggerHotkey(HotkeyAction.ShowC680OtherMfdTouchscreen);
+                            break;
+                        case HOTKEY_C680_OTHER_PFD_GTC:
+                            TriggerHotkey(HotkeyAction.ShowC680OtherPfdTouchscreen);
+                            break;
                         case HOTKEY_SHOW_DCDU:
                             TriggerHotkey(HotkeyAction.ShowDCDU);
                             break;
@@ -939,6 +947,8 @@ public class HotkeyManager : IDisposable
             RegisterHotKey(windowHandle, HOTKEY_PMDG_EFB, MOD_SHIFT, 0x54);        // Shift+T (PMDG EFB Tablet)
             RegisterHotKey(windowHandle, HOTKEY_PMDG_EFB_FO, MOD_CONTROL | MOD_SHIFT, 0x54); // Ctrl+Shift+T (PMDG EFB First Officer)
             RegisterHotKey(windowHandle, HOTKEY_SHOW_RMP, MOD_CONTROL | MOD_SHIFT, 0x52);  // Ctrl+Shift+R (A380 Radio Management Panel)
+            RegisterHotKey(windowHandle, HOTKEY_C680_OTHER_MFD_GTC, MOD_CONTROL | MOD_SHIFT, 0x4D); // Ctrl+Shift+M (Sovereign+ other-seat MFD touchscreen)
+            RegisterHotKey(windowHandle, HOTKEY_C680_OTHER_PFD_GTC, MOD_ALT | MOD_SHIFT, 0x52);     // Alt+Shift+R (Sovereign+ other-seat PFD touchscreen)
             RegisterHotKey(windowHandle, HOTKEY_SHOW_DCDU, MOD_CONTROL | MOD_SHIFT, 0x44); // Ctrl+Shift+D (A32NX DCDU / CPDLC window)
 
             // Taxi guidance hotkeys (Input mode)
@@ -999,6 +1009,8 @@ public class HotkeyManager : IDisposable
             UnregisterHotKey(windowHandle, HOTKEY_PMDG_EFB);
             UnregisterHotKey(windowHandle, HOTKEY_PMDG_EFB_FO);
             UnregisterHotKey(windowHandle, HOTKEY_SHOW_RMP);
+            UnregisterHotKey(windowHandle, HOTKEY_C680_OTHER_MFD_GTC);
+            UnregisterHotKey(windowHandle, HOTKEY_C680_OTHER_PFD_GTC);
             UnregisterHotKey(windowHandle, HOTKEY_SHOW_DCDU);
 
             // Taxi guidance hotkeys
@@ -1347,6 +1359,8 @@ public class HotkeyManager : IDisposable
         ShowPMDGEFB,
         ShowPMDGEFBFirstOfficer,
         ShowRMP,
+        ShowC680OtherMfdTouchscreen,
+        ShowC680OtherPfdTouchscreen,
         ShowDCDU,
         ShowOANS,
         ReadNearestCity,

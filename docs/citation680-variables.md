@@ -156,3 +156,14 @@ debugger (`tools/coherent-eval.ps1 -Title WTG3000_MFD -ExprFile …` with
 | Payload | `PAYLOAD STATION COUNT` 16; stations 1 and 2 190 lb (crew), the rest 0; `TOTAL WEIGHT` 24155, `EMPTY WEIGHT` 17831, `MAX GROSS WEIGHT` 30775 | station names are string SimVars SimConnect cannot deliver here ("does not recognise SimVar PAYLOAD STATION NAME"). |
 | Fuel load | `FUELSYSTEM TANK LEVEL:1/2` percent of 850 gal | proven 2026-09-09 (55 percent). |
 | EFB options | `L:SW_SOV_REALISTIC_PB` 1, `SW_SOV_Wifi_available` 1, the `SW_SOV_CONFIG_*` and `SW_SOV_PAX_VIP_*` L:vars 0 | ⚠️ `SW_SOV_ATC_SOURCE` is NOT an L:var: the plugin reads it with `GetStoredData` (a datastore key), so the ACARS provider is set only on the EFB Settings page. The ANC enum order is not in the names; read it off the EFB page. |
+
+### Touchscreens — the GTC agent (2026-09-10, `Resources/coherent-gtc-agent.js`)
+
+| Fact | Measured |
+|---|---|
+| Page title | `.gtc-view-title` carries `show-title-N` for the slot in front; the title is `.gtc-view-title-inner-text.title-N` inside it (the bar keeps one slot per open view, so "Speed Bugs" and "PFD Home" are both present while Speed Bugs is up). |
+| Buttons | `.touch-button` / `.bg-img-touch-button`, `touch-button-disabled`, `touch-button-hidden`; a label is its visible leaf texts joined with spaces ("COM1 124.850"). The frequency buttons hold hidden per-digit entry spans. |
+| Knob labels | `.label-bar-label.dual-knob` ("COM1 Freq Push:1-2 Hold:") and `.label-bar-label.center-knob` ("Pilot COM1 Volume"). |
+| Press | mousedown / mouseup / click at the button centre: `press("Speed Bugs")` → title Speed Bugs, `press("Home")` → PFD Home, both through the agent. |
+| Knobs | `H:AS3000_TSC_Vertical_<n>_<Name>` from inside the view (n from the view title); the 2026-09-09 assessment stepped COM1 standby 122.50 → 122.525. |
+| Units | GTC 1 pilot PFD, 2 left MFD, 3 right MFD, 4 copilot PFD (`C680Seat.GtcIndexFor`). One inspector socket per view: the window owns its client and disposes it on close. |

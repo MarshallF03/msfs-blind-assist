@@ -224,6 +224,7 @@ public partial class SkywardC680Definition : BaseAircraftDefinition
     public override bool HandleHotkeyAction(HotkeyAction action, SimConnectManager simConnect,
         ScreenReaderAnnouncer announcer, Form parentForm, HotkeyManager hotkeyManager)
     {
+        if (HandleC680Hotkey(action, simConnect, announcer, parentForm, hotkeyManager)) return true;
         if (action == HotkeyAction.MonitorManager)
         {
             (parentForm as MainForm)?.ShowC680MonitorManagerDialog();
